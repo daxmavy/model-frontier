@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Model Frontier</title>
+<meta name="description" content="Daily Pareto frontier of large language model capability against holistic cost.">
+<style>
+  :root {
+    color-scheme: light;
+    --surface-0:      #f4f3f0;
+    --surface-1:      #fcfcfb;
+    --surface-2:      #eeece7;
+    --border:         #dedbd4;
+    --grid:           #e8e7e3;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #78766f;
+    --series-1:       #2a78d6;
+    --series-2:       #eb6834;
+    --series-3:       #1baf7a;
+    --series-4:       #eda100;
+    --series-5:       #e87ba4;
+    --series-6:       #008300;
+    --series-7:       #4a3aa7;
+    --series-8:       #e34948;
+    --off:            #a9a69d;
+    --shadow:         0 2px 4px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --surface-0:      #121211;
+      --surface-1:      #1a1a19;
+      --surface-2:      #232321;
+      --border:         #35342f;
+      --grid:           #2b2b28;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #8d8b81;
+      --series-1:       #3987e5;
+      --series-2:       #d95926;
+      --series-3:       #199e70;
+      --series-4:       #c98500;
+      --series-5:       #d55181;
+      --series-6:       #008300;
+      --series-7:       #9085e9;
+      --series-8:       #e66767;
+      --off:            #6a685f;
+      --shadow:         0 2px 4px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface-0: #121211; --surface-1: #1a1a19; --surface-2: #232321;
+    --border: #35342f; --grid: #2b2b28;
+    --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #8d8b81;
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70;
+    --series-4: #c98500; --series-5: #d55181; --series-6: #008300;
+    --series-7: #9085e9; --series-8: #e66767; --off: #6a685f;
+    --shadow: 0 2px 4px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.5);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--surface-0); color: var(--text-primary);
+    font: 15px/1.5 ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 24px 20px 64px; }
+
+  header { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: baseline; margin-bottom: 4px; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; font-weight: 650; }
+  .sub { color: var(--text-secondary); font-size: 14px; margin: 6px 0 20px; max-width: 62ch; }
+  .stamp { color: var(--text-muted); font-size: 12.5px; margin-left: auto; }
+  .stamp b { color: var(--text-secondary); font-weight: 600; }
+
+  .controls {
+    display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end;
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px; margin-bottom: 14px;
+  }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .field > label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--text-muted); font-weight: 600; }
+  select, button, input[type="search"] {
+    font: inherit; font-size: 13.5px; color: var(--text-primary);
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 7px; padding: 6px 9px; max-width: 100%;
+  }
+  select { cursor: pointer; }
+  select:focus-visible, button:focus-visible, input:focus-visible,
+  .pt:focus-visible { outline: 2px solid var(--series-1); outline-offset: 2px; }
+  .toggles { display: flex; gap: 6px; flex-wrap: wrap; }
+  .toggle {
+    font-size: 12.5px; padding: 6px 10px; border-radius: 999px; cursor: pointer;
+    background: var(--surface-2); border: 1px solid var(--border); color: var(--text-secondary);
+  }
+  .toggle[aria-pressed="true"] {
+    background: var(--series-1); border-color: var(--series-1); color: #fff; font-weight: 600;
+  }
+  .spacer { flex: 1 1 auto; }
+
+  .panel {
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 10px; padding: 8px 8px 4px; position: relative;
+  }
+  #chart { display: block; width: 100%; height: auto; touch-action: manipulation; }
+  .ax-line { stroke: var(--border); stroke-width: 1; }
+  .grid-line { stroke: var(--grid); stroke-width: 1; }
+  .tick { fill: var(--text-muted); font-size: 11px; }
+  .ax-title { fill: var(--text-secondary); font-size: 12.5px; font-weight: 600; }
+  .front-line { fill: none; stroke: var(--series-1); stroke-width: 2;
+    stroke-linejoin: round; stroke-dasharray: 5 4; opacity: .8; }
+  .pt { cursor: pointer; }
+  .pt circle { stroke: var(--surface-1); stroke-width: 2; }
+  .lbl { fill: var(--text-secondary); font-size: 10.5px; pointer-events: none;
+    paint-order: stroke; stroke: var(--surface-1); stroke-width: 3px; stroke-linejoin: round; }
+  .empty { fill: var(--text-muted); font-size: 13px; }
+
+  #card {
+    position: absolute; z-index: 20; width: 290px; max-width: calc(100vw - 32px);
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: var(--shadow); padding: 11px 13px 12px; font-size: 13px;
+    opacity: 0; visibility: hidden; transition: opacity .1s;
+  }
+  #card.on { opacity: 1; visibility: visible; }
+  #card h3 { margin: 0 0 2px; font-size: 14px; font-weight: 650; line-height: 1.3; }
+  #card .meta { color: var(--text-muted); font-size: 12px; margin-bottom: 8px; }
+  #card dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 0 0 10px; }
+  #card dt { color: var(--text-secondary); font-size: 12.5px; }
+  #card dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; font-size: 12.5px; }
+  #card .links { display: flex; gap: 8px; }
+  #card a {
+    flex: 1; text-align: center; text-decoration: none; font-size: 12.5px; font-weight: 600;
+    padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--surface-2); color: var(--series-1);
+  }
+  #card a:hover { border-color: var(--series-1); }
+  #card a[aria-disabled="true"] { color: var(--text-muted); pointer-events: none; opacity: .55; }
+  .pin { font-size: 11px; color: var(--text-muted); margin-top: 8px; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center;
+    padding: 12px 4px 4px; font-size: 12.5px; color: var(--text-secondary); }
+  .key { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+  .dash { width: 18px; height: 0; border-top: 2px dashed var(--series-1); display: inline-block; }
+
+  .notes { color: var(--text-secondary); font-size: 13px; margin-top: 22px; max-width: 78ch; }
+  .notes h2 { font-size: 14px; margin: 20px 0 6px; color: var(--text-primary); }
+  .notes a { color: var(--series-1); }
+  .notes ul { padding-left: 18px; margin: 6px 0; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; margin-top: 10px; }
+  th, td { text-align: right; padding: 5px 8px; border-bottom: 1px solid var(--border);
+    font-variant-numeric: tabular-nums; white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--text-secondary); font-weight: 600; position: sticky; top: 0;
+    background: var(--surface-1); }
+  .tablewrap { max-height: 460px; overflow: auto; border: 1px solid var(--border);
+    border-radius: 10px; background: var(--surface-1); padding: 0 8px 8px; }
+  td a { color: var(--series-1); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>The Model Frontier</h1>
+    <div class="stamp" id="stamp"></div>
+  </header>
+  <p class="sub">
+    Which language models buy you the most capability per dollar. Cost is measured
+    holistically where possible: the total spend to run a whole benchmark, which counts
+    verbosity and reasoning tokens rather than the headline token price. Each reasoning
+    effort level is its own mark.
+  </p>
+
+  <div class="controls">
+    <div class="field">
+      <label for="ymetric">Capability</label>
+      <select id="ymetric"></select>
+    </div>
+    <div class="field">
+      <label for="xmetric">Cost</label>
+      <select id="xmetric"></select>
+    </div>
+    <div class="field">
+      <label for="scale">Cost axis</label>
+      <select id="scale">
+        <option value="log">Logarithmic</option>
+        <option value="linear">Linear</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="rank">Rank by</label>
+      <select id="rank">
+        <option value="capability">Capability</option>
+        <option value="recency">Release date</option>
+        <option value="usage">OpenRouter usage</option>
+        <option value="efficiency">Capability per dollar</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="limit">Show</label>
+      <select id="limit">
+        <option value="30">Top 30</option>
+        <option value="60" selected>Top 60</option>
+        <option value="120">Top 120</option>
+        <option value="9999">All</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="colorby">Colour</label>
+      <select id="colorby">
+        <option value="frontier">Frontier status</option>
+        <option value="creator">Developer</option>
+        <option value="weights">Open weights</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="creator">Developer</label>
+      <select id="creator"><option value="">All</option></select>
+    </div>
+    <div class="spacer"></div>
+    <div class="field">
+      <label>Include</label>
+      <div class="toggles">
+        <button class="toggle" id="t-dep" aria-pressed="false">Retired models</button>
+        <button class="toggle" id="t-est" aria-pressed="true">Estimated scores</button>
+        <button class="toggle" id="t-tbl" aria-pressed="false">Table</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <svg id="chart" role="img" aria-labelledby="charttitle"><title id="charttitle">
+      Scatter plot of model capability against cost, with the Pareto frontier marked.
+    </title></svg>
+    <div id="card" role="dialog" aria-label="Model details"></div>
+  </div>
+
+  <div class="legend" id="legend"></div>
+
+  <div id="tablepanel" hidden>
+    <div class="tablewrap"><table id="table"></table></div>
+  </div>
+
+  <div class="notes">
+    <h2>Reading the chart</h2>
+    <p>
+      A model on the dashed line is Pareto-optimal: nothing cheaper scores higher, and
+      nothing higher-scoring is cheaper. Models below the line are dominated, which means
+      some other model beats them on both axes at once. Marks are sized by reasoning
+      effort, so a model run harder appears as a larger mark further right.
+    </p>
+    <h2>Where the numbers come from</h2>
+    <p id="sources"></p>
+    <h2>Caveats</h2>
+    <ul>
+      <li>Benchmark scores measure benchmark performance. They are a proxy for usefulness, not a measurement of it.</li>
+      <li>The cost of running the index is a single measurement per model, not an average over repeated runs, so small differences are noise.</li>
+      <li>List prices ignore batch discounts, caching, and negotiated rates. Cached input in particular can move real costs a long way.</li>
+      <li>Some scores are estimated rather than measured. Turn off <em>Estimated scores</em> to exclude them.</li>
+    </ul>
+  </div>
+</div>
+
+<script type="module">
+import { money, fmtVal, fmtTokens, paretoFrontier, ticks } from './lib.js';
+
+const PALETTE = ['--series-1','--series-2','--series-3','--series-4',
+                 '--series-5','--series-6','--series-7','--series-8'];
+const EFFORT_R = { minimal: 3.5, low: 4.5, medium: 5.5, high: 6.5, xhigh: 7.5, max: 8.5 };
+const $ = s => document.querySelector(s);
+const css = v => getComputedStyle(document.body).getPropertyValue(v).trim();
+
+let DATA = null, VIEW = [], FRONT = [], pinned = null, hoverTimer = null;
+
+const state = {
+  y: 'intelligenceIndex', x: 'aaii_cost_total', scale: 'log',
+  rank: 'capability', limit: 60, colorby: 'frontier', creator: '',
+  dep: false, est: true, tbl: false,
+};
+
+const capMeta = k => DATA.capabilityMetrics.find(m => m.key === k);
+const costMeta = k => DATA.costMetrics.find(m => m.key === k);
+
+/* ---------- selection ---------- */
+function eligible() {
+  return DATA.models.filter(m =>
+    m.capability[state.y] != null && m.cost[state.x] != null && m.cost[state.x] > 0 &&
+    (state.dep || !m.deprecated) &&
+    (state.est || !m.estimated) &&
+    (!state.creator || m.creator === state.creator));
+}
+
+const rankers = {
+  capability: (a, b) => b.capability[state.y] - a.capability[state.y],
+  recency: (a, b) => (b.releaseDate || '').localeCompare(a.releaseDate || ''),
+  usage: (a, b) => (b.usageTokens || 0) - (a.usageTokens || 0) ||
+                   b.capability[state.y] - a.capability[state.y],
+  efficiency: (a, b) => b.capability[state.y] / b.cost[state.x] -
+                        a.capability[state.y] / a.cost[state.x],
+};
+
+function recompute() {
+  const rows = eligible();
+  FRONT = paretoFrontier(rows, m => m.cost[state.x], m => m.capability[state.y]);
+  const onFront = new Set(FRONT.map(m => m.slug));
+  // The frontier is the point of the chart, so it is never truncated away.
+  const rest = rows.filter(m => !onFront.has(m.slug)).sort(rankers[state.rank]);
+  VIEW = [...FRONT, ...rest.slice(0, Math.max(0, state.limit - FRONT.length))];
+  VIEW.forEach(m => { m._front = onFront.has(m.slug); });
+}
+
+/* ---------- colour ---------- */
+let creatorSlots = new Map();
+function assignColours() {
+  if (state.colorby !== 'creator') return;
+  const count = new Map();
+  VIEW.forEach(m => count.set(m.creator, (count.get(m.creator) || 0) + 1));
+  const top = [...count.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(e => e[0]);
+  creatorSlots = new Map(top.map((c, i) => [c, css(PALETTE[i])]));
+}
+function colourOf(m) {
+  if (state.colorby === 'creator') return creatorSlots.get(m.creator) || css('--off');
+  if (state.colorby === 'weights') return m.openWeights ? css('--series-3') : css('--series-1');
+  return m._front ? css('--series-1') : css('--off');
+}
+
+/* ---------- render ---------- */
+function render() {
+  recompute();
+  assignColours();
+
+  const svg = $('#chart');
+  const W = Math.max(360, svg.parentElement.clientWidth - 16);
+  const H = Math.max(380, Math.min(620, Math.round(W * 0.58)));
+  const M = { t: 16, r: 22, b: 52, l: 62 };
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('width', W);
+  svg.setAttribute('height', H);
+  svg.replaceChildren(svg.querySelector('title'));
+
+  const ns = 'http://www.w3.org/2000/svg';
+  const el = (t, a = {}) => {
+    const n = document.createElementNS(ns, t);
+    for (const k in a) n.setAttribute(k, a[k]);
+    return n;
+  };
+  const add = n => (svg.appendChild(n), n);
+
+  if (!VIEW.length) {
+    add(el('text', { x: W / 2, y: H / 2, 'text-anchor': 'middle', class: 'empty' }))
+      .textContent = 'No models report both of these measures.';
+    drawLegend(); drawTable();
+    return;
+  }
+
+  const log = state.scale === 'log';
+  const xs = VIEW.map(m => m.cost[state.x]), ys = VIEW.map(m => m.capability[state.y]);
+  let x0 = Math.min(...xs), x1 = Math.max(...xs);
+  let y0 = Math.min(...ys), y1 = Math.max(...ys);
+  if (log) { x0 /= 1.5; x1 *= 1.5; } else { const p = (x1 - x0) * .06 || 1; x0 = Math.max(0, x0 - p); x1 += p; }
+  const yp = (y1 - y0) * .08 || 1; y0 -= yp; y1 += yp;
+
+  const px = v => M.l + (log
+    ? (Math.log10(v) - Math.log10(x0)) / (Math.log10(x1) - Math.log10(x0))
+    : (v - x0) / (x1 - x0)) * (W - M.l - M.r);
+  const py = v => H - M.b - (v - y0) / (y1 - y0) * (H - M.t - M.b);
+
+  // grid + axes
+  for (const t of ticks(x0, x1, log)) {
+    add(el('line', { class: 'grid-line', x1: px(t), x2: px(t), y1: M.t, y2: H - M.b }));
+    add(el('text', { class: 'tick', x: px(t), y: H - M.b + 16, 'text-anchor': 'middle' }))
+      .textContent = money(t);
+  }
+  const ykind = capMeta(state.y).kind;
+  for (const t of ticks(y0, y1, false)) {
+    add(el('line', { class: 'grid-line', x1: M.l, x2: W - M.r, y1: py(t), y2: py(t) }));
+    add(el('text', { class: 'tick', x: M.l - 8, y: py(t) + 4, 'text-anchor': 'end' }))
+      .textContent = fmtVal(t, ykind);
+  }
+  add(el('line', { class: 'ax-line', x1: M.l, x2: W - M.r, y1: H - M.b, y2: H - M.b }));
+  add(el('line', { class: 'ax-line', x1: M.l, x2: M.l, y1: M.t, y2: H - M.b }));
+  add(el('text', { class: 'ax-title', x: (M.l + W - M.r) / 2, y: H - 10, 'text-anchor': 'middle' }))
+    .textContent = costMeta(state.x).label + (log ? ', log scale' : '');
+  const yt = add(el('text', { class: 'ax-title', 'text-anchor': 'middle',
+    transform: `translate(14 ${(M.t + H - M.b) / 2}) rotate(-90)` }));
+  yt.textContent = capMeta(state.y).label;
+
+  // frontier staircase: step right at constant capability, then up
+  const path = [];
+  const fs = [...FRONT].sort((a, b) => a.cost[state.x] - b.cost[state.x]);
+  fs.forEach((m, i) => {
+    const X = px(m.cost[state.x]), Y = py(m.capability[state.y]);
+    if (i === 0) path.push(`M ${X} ${Y}`);
+    else path.push(`L ${X} ${py(fs[i - 1].capability[state.y])}`, `L ${X} ${Y}`);
+  });
+  if (fs.length > 1) add(el('path', { class: 'front-line', d: path.join(' ') }));
+
+  // marks, dominated first so the frontier sits on top
+  const order = [...VIEW].sort((a, b) => (a._front ? 1 : 0) - (b._front ? 1 : 0));
+  for (const m of order) {
+    const g = add(el('g', { class: 'pt', tabindex: '0', role: 'button',
+      'aria-label': `${m.name}. ${capMeta(state.y).label} ${fmtVal(m.capability[state.y], ykind)}, ${costMeta(state.x).label} ${money(m.cost[state.x])}` }));
+    const c = el('circle', {
+      cx: px(m.cost[state.x]), cy: py(m.capability[state.y]),
+      r: EFFORT_R[m.effort] || 5.5, fill: colourOf(m),
+      opacity: m._front ? 1 : (state.colorby === 'frontier' ? .55 : .8),
+    });
+    g.appendChild(c);
+    g.addEventListener('pointerenter', () => showCard(m, c));
+    g.addEventListener('pointerleave', scheduleHide);
+    g.addEventListener('focus', () => showCard(m, c));
+    g.addEventListener('click', e => { e.stopPropagation(); pinned = m; showCard(m, c); });
+  }
+
+  // Direct labels on the frontier: one per model release, highest score first,
+  // skipping any that would land on top of a label already placed.
+  const placed = [], seen = new Set();
+  [...fs].reverse().forEach(m => {
+    if (seen.has(m.release)) return;
+    const X = px(m.cost[state.x]), Y = py(m.capability[state.y]);
+    const w = m.release.length * 5.6 + 12;
+    const right = X < W - M.r - w;
+    const box = { x0: right ? X + 9 : X - 9 - w, y0: Y - 7, x1: right ? X + 9 + w : X - 9, y1: Y + 7 };
+    if (placed.some(p => box.x0 < p.x1 && box.x1 > p.x0 && box.y0 < p.y1 && box.y1 > p.y0)) return;
+    placed.push(box);
+    seen.add(m.release);
+    const t = add(el('text', { class: 'lbl', x: X + (right ? 11 : -11), y: Y + 3.5,
+      'text-anchor': right ? 'start' : 'end' }));
+    t.textContent = m.release;
+  });
+
+  drawLegend();
+  drawTable();
+}
+
+/* ---------- hover card ---------- */
+function showCard(m, circle) {
+  clearTimeout(hoverTimer);
+  const card = $('#card');
+  const kind = capMeta(state.y).kind;
+  const rows = [
+    [capMeta(state.y).label, fmtVal(m.capability[state.y], kind)],
+    [costMeta(state.x).label.replace(/ \(.*/, ''), money(m.cost[state.x])],
+    ['Output price', m.cost.output_price != null ? money(m.cost.output_price) + ' / 1M' : '—'],
+    ['Released', m.releaseDate || '—'],
+    ['Context', m.contextTokens ? (m.contextTokens / 1000).toFixed(0) + 'K' : '—'],
+    ['Speed', m.speed ? m.speed.toFixed(0) + ' tok/s' : '—'],
+    ['OpenRouter use', m.usageTokens ? fmtTokens(m.usageTokens) + ' tok/day' : '—'],
+  ];
+  card.innerHTML = `
+    <h3>${esc(m.release)}</h3>
+    <div class="meta">${esc(m.creator)}
+      ${m.effort ? ` · ${esc(m.effort)} reasoning` : m.reasoning ? ' · reasoning' : ' · no reasoning'}
+      ${m.openWeights ? ' · open weights' : ''}${m.deprecated ? ' · retired' : ''}
+      ${m.estimated ? ' · score estimated' : ''}</div>
+    <dl>${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
+    <div class="links">
+      <a href="${m.aaUrl}" target="_blank" rel="noopener">Artificial Analysis</a>
+      <a href="${m.orUrl || '#'}" target="_blank" rel="noopener"
+         ${m.orUrl ? '' : 'aria-disabled="true" tabindex="-1"'}>OpenRouter</a>
+    </div>
+    <div class="pin">${pinned === m ? 'Pinned. Click the background to release.' : 'Click the mark to pin this card.'}</div>`;
+
+  const panel = $('.panel').getBoundingClientRect();
+  const b = circle.getBoundingClientRect();
+  let left = b.left - panel.left + 18;
+  if (left + 300 > panel.width) left = b.left - panel.left - 300;
+  card.style.left = Math.max(6, left) + 'px';
+  card.style.top = Math.max(6, Math.min(b.top - panel.top - 30, panel.height - 250)) + 'px';
+  card.classList.add('on');
+}
+function scheduleHide() {
+  if (pinned) return;
+  hoverTimer = setTimeout(() => $('#card').classList.remove('on'), 220);
+}
+const esc = s => String(s).replace(/[&<>"]/g, c =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+/* ---------- legend & table ---------- */
+function drawLegend() {
+  const L = $('#legend');
+  const bits = [];
+  if (state.colorby === 'creator') {
+    for (const [c, col] of creatorSlots)
+      bits.push(`<span class="key"><i class="dot" style="background:${col}"></i>${esc(c)}</span>`);
+    bits.push(`<span class="key"><i class="dot" style="background:${css('--off')}"></i>Other</span>`);
+  } else if (state.colorby === 'weights') {
+    bits.push(`<span class="key"><i class="dot" style="background:${css('--series-3')}"></i>Open weights</span>`,
+      `<span class="key"><i class="dot" style="background:${css('--series-1')}"></i>Proprietary</span>`);
+  } else {
+    bits.push(`<span class="key"><i class="dot" style="background:${css('--series-1')}"></i>On the frontier</span>`,
+      `<span class="key"><i class="dot" style="background:${css('--off')}"></i>Dominated</span>`);
+  }
+  bits.push(`<span class="key"><i class="dash"></i>Pareto frontier</span>`);
+  bits.push(`<span class="key">Mark size: reasoning effort, minimal to max</span>`);
+  bits.push(`<span class="key" style="color:var(--text-muted)">${VIEW.length} of ${eligible().length} models shown · ${FRONT.length} on the frontier</span>`);
+  L.innerHTML = bits.join('');
+}
+
+function drawTable() {
+  if (!state.tbl) return;
+  const kind = capMeta(state.y).kind;
+  const rows = [...VIEW].sort((a, b) => b.capability[state.y] - a.capability[state.y]);
+  $('#table').innerHTML =
+    `<thead><tr><th>Model</th><th>Effort</th><th>Developer</th>
+      <th>${esc(capMeta(state.y).label)}</th><th>${esc(costMeta(state.x).label)}</th>
+      <th>Frontier</th><th>Links</th></tr></thead><tbody>` +
+    rows.map(m => `<tr>
+      <td>${esc(m.release)}</td><td>${esc(m.effort || '—')}</td><td>${esc(m.creator)}</td>
+      <td>${fmtVal(m.capability[state.y], kind)}</td><td>${money(m.cost[state.x])}</td>
+      <td>${m._front ? 'yes' : ''}</td>
+      <td><a href="${m.aaUrl}" target="_blank" rel="noopener">AA</a>${
+        m.orUrl ? ` · <a href="${m.orUrl}" target="_blank" rel="noopener">OR</a>` : ''}</td>
+    </tr>`).join('') + '</tbody>';
+}
+
+/* ---------- wiring ---------- */
+function readHash() {
+  const p = new URLSearchParams(location.hash.slice(1));
+  for (const k of ['y', 'x', 'scale', 'rank', 'colorby', 'creator'])
+    if (p.has(k)) state[k] = p.get(k);
+  if (p.has('limit')) state.limit = +p.get('limit');
+  for (const k of ['dep', 'est', 'tbl']) if (p.has(k)) state[k] = p.get(k) === '1';
+}
+function writeHash() {
+  const p = new URLSearchParams();
+  p.set('y', state.y); p.set('x', state.x); p.set('scale', state.scale);
+  p.set('rank', state.rank); p.set('limit', state.limit); p.set('colorby', state.colorby);
+  if (state.creator) p.set('creator', state.creator);
+  if (state.dep) p.set('dep', '1');
+  if (!state.est) p.set('est', '0');
+  if (state.tbl) p.set('tbl', '1');
+  history.replaceState(null, '', '#' + p);
+}
+
+function bind() {
+  const sel = (id, key, num) => {
+    const e = $(id);
+    e.value = num ? String(state[key]) : state[key];
+    e.addEventListener('change', () => {
+      state[key] = num ? +e.value : e.value;
+      pinned = null; $('#card').classList.remove('on');
+      writeHash(); render();
+    });
+  };
+  sel('#ymetric', 'y'); sel('#xmetric', 'x'); sel('#scale', 'scale');
+  sel('#rank', 'rank'); sel('#limit', 'limit', true);
+  sel('#colorby', 'colorby'); sel('#creator', 'creator');
+
+  const tog = (id, key, after) => {
+    const b = $(id);
+    b.setAttribute('aria-pressed', String(state[key]));
+    b.addEventListener('click', () => {
+      state[key] = !state[key];
+      b.setAttribute('aria-pressed', String(state[key]));
+      writeHash(); if (after) after(); render();
+    });
+  };
+  tog('#t-dep', 'dep'); tog('#t-est', 'est');
+  tog('#t-tbl', 'tbl', () => $('#tablepanel').hidden = !state.tbl);
+  $('#tablepanel').hidden = !state.tbl;
+
+  $('#card').addEventListener('pointerenter', () => clearTimeout(hoverTimer));
+  $('#card').addEventListener('pointerleave', scheduleHide);
+  document.addEventListener('click', () => {
+    pinned = null; $('#card').classList.remove('on');
+  });
+  addEventListener('resize', () => { clearTimeout(hoverTimer); render(); });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);
+}
+
+function fillSelects() {
+  $('#ymetric').innerHTML = DATA.capabilityMetrics
+    .map(m => `<option value="${m.key}" title="${esc(m.help)}">${esc(m.label)}</option>`).join('');
+  $('#xmetric').innerHTML = DATA.costMetrics
+    .map(m => `<option value="${m.key}" title="${esc(m.help)}">${esc(m.label)}</option>`).join('');
+  const creators = [...new Set(DATA.models.filter(m => !m.deprecated).map(m => m.creator))].sort();
+  $('#creator').innerHTML = '<option value="">All</option>' +
+    creators.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  if (!capMeta(state.y)) state.y = DATA.capabilityMetrics[0].key;
+  if (!costMeta(state.x)) state.x = DATA.costMetrics[0].key;
+}
+
+fetch('data/models.json?' + Date.now()).then(r => r.json()).then(d => {
+  DATA = d;
+  const when = new Date(d.generated);
+  $('#stamp').innerHTML = `Updated <b>${when.toISOString().slice(0, 10)}</b> · ` +
+    `${d.counts.live} current models · ${d.counts.withIndexCost} with measured index cost`;
+  $('#sources').innerHTML =
+    `Capability scores, prices and the cost of running the Intelligence Index come from ` +
+    `<a href="https://artificialanalysis.ai/leaderboards/models" target="_blank" rel="noopener">Artificial Analysis</a>. ` +
+    `Live provider prices and usage come from ` +
+    `<a href="https://openrouter.ai/models" target="_blank" rel="noopener">OpenRouter</a>. ` +
+    `The dataset is rebuilt every day; this copy was generated ${d.generated.replace('T', ' ').replace('+00:00', ' UTC')}.`;
+  readHash(); fillSelects(); bind(); render();
+}).catch(e => {
+  $('#stamp').textContent = 'Could not load the dataset.';
+  console.error(e);
+});
+</script>
+</body>
+</html>
