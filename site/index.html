@@ -27,6 +27,7 @@
     --series-6:       #008300;
     --series-7:       #4a3aa7;
     --series-8:       #e34948;
+    --series-9:       #a33ea1;
     --off:            #a9a69d;
     --shadow:         0 2px 4px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.08);
 
@@ -53,6 +54,7 @@
       --series-6:       #008300;
       --series-7:       #9085e9;
       --series-8:       #e66767;
+      --series-9:       #b755b4;
       --off:            #6a685f;
       --shadow:         0 2px 4px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.5);
     }
@@ -64,7 +66,7 @@
     --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #8d8b81;
     --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70;
     --series-4: #c98500; --series-5: #d55181; --series-6: #008300;
-    --series-7: #9085e9; --series-8: #e66767; --off: #6a685f;
+    --series-7: #9085e9; --series-8: #e66767; --series-9: #b755b4; --off: #6a685f;
     --shadow: 0 2px 4px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.5);
   }
 
@@ -275,7 +277,7 @@
     <h2>Caveats</h2>
     <ul>
       <li>Benchmark scores measure benchmark performance. They are a proxy for usefulness, not a measurement of it.</li>
-      <li>The cost of running the index is a single measurement per model, not an average over repeated runs, so small differences are noise.</li>
+      <li>Cost per task is a single measurement per model, not an average over repeated runs, so small differences are noise.</li>
       <li>List prices ignore batch discounts, caching, and negotiated rates. Cached input in particular can move real costs a long way.</li>
       <li id="estnote"></li>
       <li>Models Artificial Analysis has retired, and models it lists no price for at all, are left out entirely.</li>
@@ -286,8 +288,8 @@
 <script type="module">
 import { money, fmtVal, fmtTokens, paretoFrontier, ticks } from './lib.js';
 
-const PALETTE = ['--series-1','--series-2','--series-3','--series-4',
-                 '--series-5','--series-6','--series-7','--series-8'];
+const PALETTE = ['--series-1','--series-2','--series-3','--series-4','--series-5',
+                 '--series-6','--series-7','--series-8','--series-9'];
 const $ = s => document.querySelector(s);
 const css = v => getComputedStyle(document.body).getPropertyValue(v).trim();
 
@@ -337,10 +339,10 @@ function recompute() {
 }
 
 /* ---------- colour ---------- */
-// The developers that get their own colour, in slot order. The palette has
-// eight slots, so everyone else shares the muted "Other" grey.
-const HIGHLIGHTED = ['OpenAI', 'Anthropic', 'Google', 'SpaceXAI',
-                     'DeepSeek', 'Alibaba', 'Kimi', 'Z AI'];
+// The developers that get their own colour, in slot order. Everyone else
+// shares the muted "Other" grey.
+const HIGHLIGHTED = ['OpenAI', 'Anthropic', 'Google', 'SpaceXAI', 'DeepSeek',
+                     'Alibaba', 'Kimi', 'Z AI', 'Meta'];
 
 let creatorSlots = new Map();
 function assignColours() {
@@ -584,10 +586,10 @@ fetch('data/models.json?' + Date.now()).then(r => r.json()).then(d => {
     `Artificial Analysis marks ${est.length} of the ${d.counts.models} models here as ` +
     `<em>estimated</em> rather than fully measured, and does not publish what that means. ` +
     (estCost === 0
-      ? 'None of them has a measured cost to run the index, so they appear only on the price-based cost axes.'
+      ? 'None of them has a measured cost per task, so they appear only on the price-based cost axes.'
       : `${estCost} of them also carry a measured index cost.`);
   $('#sources').innerHTML =
-    `Capability scores, prices and the cost of running the Intelligence Index come from ` +
+    `Capability scores, list prices and cost per task come from ` +
     `<a href="https://artificialanalysis.ai/leaderboards/models" target="_blank" rel="noopener">Artificial Analysis</a>. ` +
     `Live provider prices and usage come from ` +
     `<a href="https://openrouter.ai/models" target="_blank" rel="noopener">OpenRouter</a>. ` +

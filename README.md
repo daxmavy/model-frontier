@@ -81,6 +81,6 @@ cost is unknown on every axis.
 ## Caveats
 
 Benchmark scores are a proxy for usefulness, not a measurement of it. The cost of
-running the index is one measurement per model rather than an average over
+cost per task is one measurement per model rather than an average over
 repeated runs, so small differences are noise. List prices ignore batch
 discounts, caching and negotiated rates.
