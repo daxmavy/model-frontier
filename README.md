@@ -2,6 +2,8 @@
 
 A daily-updating chart of what language-model capability actually costs.
 
+**Live at <https://daxmavy.github.io/model-frontier/>**
+
 The question it answers: **for a given level of capability, what is the cheapest
 model that reaches it?** Models on the Pareto frontier are the answer at each
 level. Everything below the frontier is dominated, meaning some other model is
