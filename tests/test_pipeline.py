@@ -97,6 +97,15 @@ class TestBuild(unittest.TestCase):
         self.assertTrue(acme["aaUrl"].endswith("/acme-1-high"))
         self.assertTrue(acme["aaReleaseUrl"].endswith("/acme-1"))
 
+    def test_retired_models_never_reach_the_page(self):
+        import unittest.mock as mock
+        with mock.patch.object(build, "fetch", side_effect=RuntimeError("offline")):
+            data = build.build_from_html(PAGE, min_models=1)
+        slugs = [m["slug"] for m in data["models"]]
+        self.assertIn("acme-1-high", slugs)
+        self.assertNotIn("budget-9", slugs)          # marked deprecated in the fixture
+        self.assertNotIn("deprecated", data["models"][0])
+
     def test_build_refuses_a_page_it_could_not_parse(self):
         with self.assertRaises(SystemExit):
             build.build_from_html("<html>nothing here</html>", min_models=1)

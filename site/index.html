@@ -207,20 +207,11 @@
       </select>
     </div>
     <div class="field">
-      <label for="rank">Rank by</label>
-      <select id="rank">
-        <option value="capability">Capability</option>
-        <option value="recency">Release date</option>
-        <option value="usage">OpenRouter usage</option>
-        <option value="efficiency">Capability per dollar</option>
-      </select>
-    </div>
-    <div class="field">
       <label for="scope">Show</label>
       <select id="scope">
         <option value="major-year">Major labs, past year</option>
         <option value="year">Any lab, past year</option>
-        <option value="top">Top 60 by rank</option>
+        <option value="top">Top 60 by capability</option>
         <option value="all">Everything</option>
       </select>
     </div>
@@ -247,7 +238,7 @@
     <div class="field">
       <label for="vram">Fits in</label>
       <select id="vram">
-        <option value="0">Any hardware</option>
+        <option value="0">n/a</option>
         <option value="24">24 GB</option>
         <option value="48">48 GB</option>
         <option value="80">80 GB, one H100</option>
@@ -260,7 +251,6 @@
     <div class="field">
       <label>Include</label>
       <div class="toggles">
-        <button class="toggle" id="t-dep" aria-pressed="false">Retired models</button>
         <button class="toggle" id="t-est" aria-pressed="true">Estimated scores</button>
         <button class="toggle" id="t-tbl" aria-pressed="false">Table</button>
       </div>
@@ -296,6 +286,7 @@
       <li>The cost of running the index is a single measurement per model, not an average over repeated runs, so small differences are noise.</li>
       <li>List prices ignore batch discounts, caching, and negotiated rates. Cached input in particular can move real costs a long way.</li>
       <li>Some scores are estimated rather than measured. Turn off <em>Estimated scores</em> to exclude them.</li>
+      <li>Models Artificial Analysis has retired are left out entirely.</li>
     </ul>
   </div>
 </div>
@@ -313,7 +304,7 @@ let DATA = null, VIEW = [], FRONT = [], pinned = null, hoverTimer = null;
 
 const state = {
   y: 'intelligenceIndex', x: 'aaii_cost_total', scale: 'log',
-  rank: 'capability', scope: 'major-year', colorby: 'frontier', creator: '',
+  scope: 'major-year', colorby: 'frontier', creator: '',
   weights: '', vram: 0, dep: false, est: true, tbl: false,
 };
 
@@ -328,7 +319,6 @@ const YEAR_AGO = new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10);
 function eligible() {
   return DATA.models.filter(m =>
     m.capability[state.y] != null && m.cost[state.x] != null && m.cost[state.x] > 0 &&
-    (state.dep || !m.deprecated) &&
     (state.est || !m.estimated) &&
     (!state.creator || m.creator === state.creator) &&
     (state.weights === '' || (state.weights === 'open') === m.openWeights) &&
@@ -343,15 +333,6 @@ function inScope(m) {
   return false;
 }
 
-const rankers = {
-  capability: (a, b) => b.capability[state.y] - a.capability[state.y],
-  recency: (a, b) => (b.releaseDate || '').localeCompare(a.releaseDate || ''),
-  usage: (a, b) => (b.usageTokens || 0) - (a.usageTokens || 0) ||
-                   b.capability[state.y] - a.capability[state.y],
-  efficiency: (a, b) => b.capability[state.y] / b.cost[state.x] -
-                        a.capability[state.y] / a.cost[state.x],
-};
-
 function recompute() {
   const rows = eligible();
   FRONT = paretoFrontier(rows, m => m.cost[state.x], m => m.capability[state.y]);
@@ -359,7 +340,8 @@ function recompute() {
   // The frontier is the point of the chart, so it is never truncated away.
   const others = rows.filter(m => !onFront.has(m.slug));
   const rest = state.scope === 'top'
-    ? others.sort(rankers[state.rank]).slice(0, Math.max(0, 60 - FRONT.length))
+    ? others.sort((a, b) => b.capability[state.y] - a.capability[state.y])
+            .slice(0, Math.max(0, 60 - FRONT.length))
     : others.filter(inScope);
   VIEW = [...FRONT, ...rest];
   VIEW.forEach(m => { m._front = onFront.has(m.slug); });
@@ -509,7 +491,7 @@ function showCard(m, circle) {
     <h3>${esc(m.release)}</h3>
     <div class="meta">${esc(m.creator)}
       ${m.effort ? ` · ${esc(m.effort)} reasoning` : m.reasoning ? ' · reasoning' : ' · no reasoning'}
-      ${m.openWeights ? ' · open weights' : ''}${m.deprecated ? ' · retired' : ''}
+      ${m.openWeights ? ' · open weights' : ''}
       ${m.estimated ? ' · score estimated' : ''}</div>
     <dl>${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
     <div class="links">
@@ -575,19 +557,18 @@ function drawTable() {
 /* ---------- wiring ---------- */
 function readHash() {
   const p = new URLSearchParams(location.hash.slice(1));
-  for (const k of ['y', 'x', 'scale', 'rank', 'scope', 'colorby', 'creator', 'weights'])
+  for (const k of ['y', 'x', 'scale', 'scope', 'colorby', 'creator', 'weights'])
     if (p.has(k)) state[k] = p.get(k);
   if (p.has('vram')) state.vram = +p.get('vram');
-  for (const k of ['dep', 'est', 'tbl']) if (p.has(k)) state[k] = p.get(k) === '1';
+  for (const k of ['est', 'tbl']) if (p.has(k)) state[k] = p.get(k) === '1';
 }
 function writeHash() {
   const p = new URLSearchParams();
   p.set('y', state.y); p.set('x', state.x); p.set('scale', state.scale);
-  p.set('rank', state.rank); p.set('scope', state.scope); p.set('colorby', state.colorby);
+  p.set('scope', state.scope); p.set('colorby', state.colorby);
   if (state.creator) p.set('creator', state.creator);
   if (state.weights) p.set('weights', state.weights);
   if (state.vram) p.set('vram', state.vram);
-  if (state.dep) p.set('dep', '1');
   if (!state.est) p.set('est', '0');
   if (state.tbl) p.set('tbl', '1');
   history.replaceState(null, '', '#' + p);
@@ -604,7 +585,7 @@ function bind() {
     });
   };
   sel('#ymetric', 'y'); sel('#xmetric', 'x'); sel('#scale', 'scale');
-  sel('#rank', 'rank'); sel('#scope', 'scope'); sel('#vram', 'vram', true);
+  sel('#scope', 'scope'); sel('#vram', 'vram', true);
   sel('#colorby', 'colorby'); sel('#creator', 'creator'); sel('#weights', 'weights');
 
   const tog = (id, key, after) => {
@@ -616,7 +597,7 @@ function bind() {
       writeHash(); if (after) after(); render();
     });
   };
-  tog('#t-dep', 'dep'); tog('#t-est', 'est');
+  tog('#t-est', 'est');
   tog('#t-tbl', 'tbl', () => $('#tablepanel').hidden = !state.tbl);
   $('#tablepanel').hidden = !state.tbl;
 
@@ -634,9 +615,11 @@ function fillSelects() {
     .map(m => `<option value="${m.key}" title="${esc(m.help)}">${esc(m.label)}</option>`).join('');
   $('#xmetric').innerHTML = DATA.costMetrics
     .map(m => `<option value="${m.key}" title="${esc(m.help)}">${esc(m.label)}</option>`).join('');
-  const creators = [...new Set(DATA.models.filter(m => !m.deprecated).map(m => m.creator))].sort();
-  $('#creator').innerHTML = '<option value="">All</option>' +
-    creators.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  const major = [...new Set(DATA.models.filter(m => m.majorLab).map(m => m.creator))].sort();
+  const rest = [...new Set(DATA.models.filter(m => !m.majorLab).map(m => m.creator))].sort();
+  const opt = c => `<option value="${esc(c)}">${esc(c)}</option>`;
+  $('#creator').innerHTML = '<option value="">All</option><hr>' +
+    major.map(opt).join('') + '<hr>' + rest.map(opt).join('');
   if (!capMeta(state.y)) state.y = DATA.capabilityMetrics[0].key;
   if (!costMeta(state.x)) state.x = DATA.costMetrics[0].key;
 }
@@ -645,7 +628,7 @@ fetch('data/models.json?' + Date.now()).then(r => r.json()).then(d => {
   DATA = d;
   const when = new Date(d.generated);
   $('#stamp').innerHTML = `Updated <b>${when.toISOString().slice(0, 10)}</b> · ` +
-    `${d.counts.live} current models · ${d.counts.withIndexCost} with measured index cost`;
+    `${d.counts.models} current models · ${d.counts.withIndexCost} with measured index cost`;
   $('#sources').innerHTML =
     `Capability scores, prices and the cost of running the Intelligence Index come from ` +
     `<a href="https://artificialanalysis.ai/leaderboards/models" target="_blank" rel="noopener">Artificial Analysis</a>. ` +

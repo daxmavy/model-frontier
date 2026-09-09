@@ -204,6 +204,8 @@ def build_from_html(aa_html: str, or_models: list[dict] | None = None,
 
     models = []
     for slug, r in aa_rows.items():
+        if r.get("deprecated"):
+            continue
         cap = {k: r.get(k) for k, *_ in CAPABILITY_METRICS if isinstance(r.get(k), (int, float))}
         if not cap:
             continue
@@ -257,7 +259,6 @@ def build_from_html(aa_html: str, or_models: list[dict] | None = None,
             "effortLevel": eff.get("level"),
             "reasoning": bool(r.get("isReasoning")),
             "openWeights": bool(r.get("isOpenWeights")),
-            "deprecated": bool(r.get("deprecated")),
             "releaseDate": r.get("releaseDate"),
             "contextTokens": r.get("contextWindowTokens"),
             "speed": r.get("medianOutputTokensPerSecond"),
@@ -288,7 +289,6 @@ def build_from_html(aa_html: str, or_models: list[dict] | None = None,
         "generated": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
         "counts": {
             "models": len(models),
-            "live": sum(1 for m in models if not m["deprecated"]),
             "withIndexCost": sum(1 for m in models if m["cost"]["aaii_cost_total"]),
             "withOpenRouter": sum(1 for m in models if m["orUrl"]),
             "withEpoch": sum(1 for m in models
@@ -362,7 +362,7 @@ if __name__ == "__main__":
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(data, separators=(",", ":")), encoding="utf-8")
     c = data["counts"]
-    print(f"{c['models']} models ({c['live']} current), "
+    print(f"{c['models']} current models, "
           f"{c['withIndexCost']} with index cost, {c['withOpenRouter']} matched to OpenRouter "
           f"-> {out} ({out.stat().st_size/1024:.0f} KB)")
 
