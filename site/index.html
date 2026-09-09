@@ -234,9 +234,8 @@
   </div>
 
   <div class="panel">
-    <svg id="chart" role="img" aria-labelledby="charttitle"><title id="charttitle">
-      Scatter plot of model capability against cost, with the Pareto frontier marked.
-    </title></svg>
+    <svg id="chart" role="img"
+         aria-label="Scatter plot of model capability against cost, with the Pareto frontier marked."></svg>
     <div id="card" role="dialog" aria-label="Model details"></div>
   </div>
 
@@ -256,21 +255,9 @@
     <div class="field">
       <label for="colorby">Colour</label>
       <select id="colorby">
-        <option value="frontier">Frontier status</option>
         <option value="creator">Developer</option>
+        <option value="frontier">Frontier status</option>
         <option value="weights">Open weights</option>
-      </select>
-    </div>
-    <div class="field">
-      <label for="vram">Fits in</label>
-      <select id="vram">
-        <option value="0">n/a</option>
-        <option value="24">24 GB</option>
-        <option value="48">48 GB</option>
-        <option value="80">80 GB, one H100</option>
-        <option value="160">160 GB</option>
-        <option value="320">320 GB, four H100</option>
-        <option value="640">640 GB, eight H100</option>
       </select>
     </div>
   </div>
@@ -308,8 +295,8 @@ let DATA = null, VIEW = [], FRONT = [], pinned = null, hoverTimer = null;
 
 const state = {
   y: 'intelligenceIndex', x: 'aaii_cost_total',
-  scope: 'year', colorby: 'frontier', creator: '',
-  weights: '', vram: 0,
+  scope: 'year', colorby: 'creator', creator: '',
+  weights: '',
 };
 
 const capMeta = k => DATA.capabilityMetrics.find(m => m.key === k);
@@ -324,8 +311,7 @@ function eligible() {
   return DATA.models.filter(m =>
     m.capability[state.y] != null && m.cost[state.x] != null && m.cost[state.x] > 0 &&
     (!state.creator || m.creator === state.creator) &&
-    (state.weights === '' || (state.weights === 'open') === m.openWeights) &&
-    (!state.vram || (m.openWeights && m.vramGB != null && m.vramGB <= state.vram)));
+    (state.weights === '' || (state.weights === 'open') === m.openWeights));
 }
 
 // Scope only decides how much of that set is drawn, so the frontier ignores it.
@@ -351,13 +337,17 @@ function recompute() {
 }
 
 /* ---------- colour ---------- */
+// The developers that get their own colour, in slot order. The palette has
+// eight slots, so everyone else shares the muted "Other" grey.
+const HIGHLIGHTED = ['OpenAI', 'Anthropic', 'Google', 'SpaceXAI',
+                     'DeepSeek', 'Alibaba', 'Kimi', 'Z AI'];
+
 let creatorSlots = new Map();
 function assignColours() {
-  if (state.colorby !== 'creator') return;
-  const count = new Map();
-  VIEW.forEach(m => count.set(m.creator, (count.get(m.creator) || 0) + 1));
-  const top = [...count.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(e => e[0]);
-  creatorSlots = new Map(top.map((c, i) => [c, css(PALETTE[i])]));
+  if (state.colorby !== 'creator') { creatorSlots = new Map(); return; }
+  const present = new Set(VIEW.map(m => m.creator));
+  creatorSlots = new Map(HIGHLIGHTED.filter(c => present.has(c))
+    .map((c, i) => [c, css(PALETTE[i])]));
 }
 function colourOf(m) {
   if (state.colorby === 'creator') return creatorSlots.get(m.creator) || css('--off');
@@ -377,7 +367,7 @@ function render() {
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   svg.setAttribute('width', W);
   svg.setAttribute('height', H);
-  svg.replaceChildren(svg.querySelector('title'));
+  svg.replaceChildren();
 
   const ns = 'http://www.w3.org/2000/svg';
   const el = (t, a = {}) => {
@@ -485,8 +475,6 @@ function showCard(m, circle) {
     ['Released', m.releaseDate || '—'],
     ['Context', m.contextTokens ? (m.contextTokens / 1000).toFixed(0) + 'K' : '—'],
     ['Speed', m.speed ? m.speed.toFixed(0) + ' tok/s' : '—'],
-    ['Parameters', m.params ? (m.params / 1e9).toFixed(0) + 'B' : '—'],
-    ['Needs about', m.vramGB ? m.vramGB.toFixed(0) + ' GB at bf16' : '—'],
     ['OpenRouter use', m.usageTokens ? fmtTokens(m.usageTokens) + ' tok/day' : '—'],
   ];
   card.innerHTML = `
@@ -523,12 +511,15 @@ const esc = s => String(s).replace(/[&<>"]/g, c =>
 // chart. Frontier status is already legible from the dashed line.
 function drawLegend() {
   const L = $('#legend');
-  L.hidden = state.colorby !== 'creator';
-  L.innerHTML = L.hidden ? '' :
-    [...creatorSlots].map(([c, col]) =>
-      `<span class="key"><i class="dot" style="background:${col}"></i>${esc(c)}</span>`)
-      .concat(`<span class="key"><i class="dot" style="background:${css('--off')}"></i>Other</span>`)
-      .join('');
+  const key = (col, label) =>
+    `<span class="key"><i class="dot" style="background:${col}"></i>${esc(label)}</span>`;
+  L.hidden = state.colorby === 'frontier';
+  L.innerHTML =
+    state.colorby === 'creator'
+      ? [...creatorSlots].map(([c, col]) => key(col, c)).join('') + key(css('--off'), 'Other')
+      : state.colorby === 'weights'
+        ? key(css('--series-3'), 'Open weights') + key(css('--series-1'), 'Proprietary')
+        : '';
   $('#count').textContent =
     `${VIEW.length} of ${eligible().length} models shown, ${FRONT.length} on the frontier`;
 }
@@ -538,7 +529,6 @@ function readHash() {
   const p = new URLSearchParams(location.hash.slice(1));
   for (const k of ['y', 'x', 'scope', 'colorby', 'creator', 'weights'])
     if (p.has(k)) state[k] = p.get(k);
-  if (p.has('vram')) state.vram = +p.get('vram');
 }
 function writeHash() {
   const p = new URLSearchParams();
@@ -546,7 +536,6 @@ function writeHash() {
   p.set('scope', state.scope); p.set('colorby', state.colorby);
   if (state.creator) p.set('creator', state.creator);
   if (state.weights) p.set('weights', state.weights);
-  if (state.vram) p.set('vram', state.vram);
   history.replaceState(null, '', '#' + p);
 }
 
@@ -561,7 +550,7 @@ function bind() {
     });
   };
   sel('#ymetric', 'y'); sel('#xmetric', 'x');
-  sel('#scope', 'scope'); sel('#vram', 'vram', true);
+  sel('#scope', 'scope');
   sel('#colorby', 'colorby'); sel('#creator', 'creator'); sel('#weights', 'weights');
 
   $('#card').addEventListener('pointerenter', () => clearTimeout(hoverTimer));

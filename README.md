@@ -12,10 +12,11 @@ both cheaper and better.
 Existing views each pick one axis and one cost measure. This one lets you choose
 both, and it is careful about what "cost" means.
 
-- **Cost is holistic by default.** The headline measure is the total dollars
-  Artificial Analysis spent running its whole Intelligence Index on a model. A
-  verbose model that emits five times the reasoning tokens costs five times as
-  much to run, and that shows up here where a per-token price hides it.
+- **Cost is holistic by default.** The headline measure is what one task on the
+  Artificial Analysis Intelligence Index costs on a given model, averaged across
+  the index. It counts the tokens actually consumed, so a verbose model that
+  emits five times the reasoning tokens costs five times as much, which a
+  per-token price hides.
 - **Reasoning levels are separate marks.** Running a model at `high` versus
   `minimal` changes both its score and its bill, so they are not the same
   product and are not merged into one point.
@@ -28,11 +29,10 @@ both, and it is careful about what "cost" means.
 
 | Source | What it contributes |
 | --- | --- |
-| Artificial Analysis leaderboard | capability scores, list prices, cost to run the index, reasoning effort |
+| Artificial Analysis leaderboard | capability scores, list prices, cost per task, reasoning effort |
 | Epoch AI benchmark results | FrontierMath and other tasks Artificial Analysis does not run |
-| OpenRouter model list | live provider pricing, model links, Hugging Face identifiers |
+| OpenRouter model list | live provider pricing, model links |
 | OpenRouter rankings | recent token usage, used for the popularity ranking |
-| Hugging Face | parameter counts, which become the memory estimate |
 
 Epoch records reasoning effort in its model identifiers too, so its scores join
 onto the right variant rather than being smeared across a model family.
@@ -51,12 +51,8 @@ The frontier is computed over everything that passes the filters and is never
 truncated, so a cheap outlier still appears even when it falls outside the
 default scope.
 
-Three filters narrow the set further: open weights against proprietary, a single
-developer, and a memory ceiling. The memory filter keeps only open-weight models
-whose parameter count fits the chosen card, at roughly two bytes per parameter
-with a fifth again for activations and the key-value cache. A proprietary model
-cannot be run on your own hardware at any size, so it drops out whenever a
-ceiling is set.
+Two filters narrow the set further: open weights against proprietary, and a
+single developer.
 
 ## Running it locally
 

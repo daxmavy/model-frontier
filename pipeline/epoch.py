@@ -74,19 +74,14 @@ def _number(row: dict, *keys: str) -> float | None:
     return None
 
 
-def parse(csv_text: str) -> tuple[dict, dict]:
-    """Return ({(base, effort): {metric: score}}, {base: parameter_count})."""
+def parse(csv_text: str) -> dict:
+    """Return {(base, effort): {metric: score}}."""
     scores: dict[tuple[str, str | None], dict[str, float]] = {}
-    params: dict[str, float] = {}
 
     for row in csv.DictReader(io.StringIO(csv_text)):
         base, effort = split_model(row.get("model") or "")
         if not base:
             continue
-
-        n = _number(row, "Parameters")
-        if n and n > 1e6:
-            params.setdefault(base, n)
 
         spec = TASKS.get((row.get("task") or "").strip())
         if not spec:
@@ -100,7 +95,7 @@ def parse(csv_text: str) -> tuple[dict, dict]:
         # keep the best run when a model was evaluated more than once
         bucket[spec[0]] = max(bucket.get(spec[0], 0.0), score)
 
-    return scores, params
+    return scores
 
 
 def metrics() -> list[tuple[str, str, str, str]]:

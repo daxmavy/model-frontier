@@ -20,7 +20,6 @@ import sys
 import urllib.request
 
 import epoch
-import weights
 from aa_parse import extract, _arrays
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -30,14 +29,13 @@ CACHE = ROOT / "data"
 AA_LEADERBOARD = "https://artificialanalysis.ai/leaderboards/models"
 OR_MODELS = "https://openrouter.ai/api/v1/models"
 OR_RANKINGS = "https://openrouter.ai/rankings"
-HF_CACHE = ROOT / "data" / "hf_params.json"
 
 # The labs whose releases the chart shows by default: the Western frontier labs
 # and the Chinese labs that ship competitive frontier models. Everything else
 # stays one click away behind the developer filter.
 MAJOR_LABS = {
     "OpenAI", "Anthropic", "Google", "Google DeepMind", "xAI", "SpaceXAI",
-    "Meta", "Mistral",
+    "Meta",
     "DeepSeek", "Alibaba", "Moonshot AI", "Kimi", "Z AI", "Zhipu AI",
     "MiniMax", "Tencent", "ByteDance", "Baidu", "Xiaomi",
 }
@@ -76,17 +74,18 @@ CAPABILITY_METRICS = [
 ] + epoch.metrics()
 
 COST_METRICS = [
-    ("aaii_cost_total", "Cost to run the Intelligence Index (USD)",
-     "Total dollars Artificial Analysis spent running the whole index on this "
-     "model. Captures verbosity and reasoning tokens, not just the token price."),
+    ("aaii_cost_total", "Cost per task, Intelligence Index (USD)",
+     "What one task on the Artificial Analysis Intelligence Index costs on this "
+     "model, averaged across the index. Counts the tokens actually consumed, so "
+     "verbosity and reasoning show up here where a token price hides them."),
     ("blended_price", "Blended price, 3:1 (USD / 1M tokens)",
      "Three parts input to one part output, at list price."),
     ("output_price", "Output price (USD / 1M tokens)", "List price per million output tokens."),
     ("input_price", "Input price (USD / 1M tokens)", "List price per million input tokens."),
     ("or_blended_price", "OpenRouter blended price, 3:1 (USD / 1M tokens)",
      "Same 3:1 blend using OpenRouter's listed price for the default provider."),
-    ("cost_per_index_point", "Index cost per intelligence point (USD)",
-     "Cost to run the Intelligence Index divided by the score it achieved."),
+    ("cost_per_index_point", "Cost per task per index point (USD)",
+     "Cost of one task divided by the intelligence score the model achieved."),
 ]
 
 
@@ -190,17 +189,11 @@ def build_from_html(aa_html: str, or_models: list[dict] | None = None,
             usage = {}
 
     try:
-        ep_scores, ep_params = epoch.parse(fetch(epoch.CSV_URL))
+        ep_scores = epoch.parse(fetch(epoch.CSV_URL))
     except Exception as e:                                    # noqa: BLE001
         print(f"warning: Epoch AI results unavailable ({e})", file=sys.stderr)
-        ep_scores, ep_params = {}, {}
+        ep_scores = {}
 
-    hf_ids = sorted({m["hugging_face_id"] for m in or_models if m.get("hugging_face_id")})
-    try:
-        hf_params = weights.resolve(hf_ids, HF_CACHE)
-    except Exception as e:                                    # noqa: BLE001
-        print(f"warning: Hugging Face parameter counts unavailable ({e})", file=sys.stderr)
-        hf_params = {}
 
     models = []
     for slug, r in aa_rows.items():
@@ -232,12 +225,6 @@ def build_from_html(aa_html: str, or_models: list[dict] | None = None,
               or {})
         cap.update({k: v for k, v in ep.items() if k not in cap})
 
-        params = None
-        if orm and orm.get("hugging_face_id"):
-            params = hf_params.get(orm["hugging_face_id"])
-        if params is None:
-            params = ep_params.get(norm(base_slug))
-
         total = cost_total(r)
         ii = r.get("intelligenceIndex")
 
@@ -268,8 +255,6 @@ def build_from_html(aa_html: str, or_models: list[dict] | None = None,
             "latency": r.get("medianTimeToFirstAnswerTokenSeconds"),
             "estimated": bool(r.get("intelligenceIndexIsEstimated")),
             "majorLab": (r.get("modelCreatorName") or "") in MAJOR_LABS,
-            "params": params,
-            "vramGB": round(weights.vram_gb(params), 1) if params else None,
             "capability": {k: round(v, 4) for k, v in cap.items()},
             "cost": {k: (round(v, 6) if v is not None else None) for k, v in cost.items()},
             "aaUrl": f"https://artificialanalysis.ai/models/{slug}",
@@ -296,7 +281,6 @@ def build_from_html(aa_html: str, or_models: list[dict] | None = None,
             "withOpenRouter": sum(1 for m in models if m["orUrl"]),
             "withEpoch": sum(1 for m in models
                              if any(k.startswith("epoch_") for k in m["capability"])),
-            "withParams": sum(1 for m in models if m["params"]),
         },
         "capabilityMetrics": [
             {"key": k, "label": lab, "kind": kind, "help": h} for k, lab, kind, h in caps
