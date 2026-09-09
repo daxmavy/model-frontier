@@ -165,11 +165,23 @@
   .legend { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center;
     padding: 12px 4px 4px; font-size: 12.5px; color: var(--text-secondary); }
   .key { display: inline-flex; align-items: center; gap: 6px; }
-  .key:last-child { font-family: var(--mono); font-size: 11.5px; }
+  .count { font-family: var(--mono); font-size: 11.5px; color: var(--text-muted);
+    margin: 10px 4px 0; }
   .dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
   .dash { width: 18px; height: 0; border-top: 2px dashed var(--series-1); display: inline-block; }
 
-  .notes { color: var(--text-secondary); font-size: 13px; margin-top: 22px; max-width: 78ch; }
+  .notes { color: var(--text-secondary); font-size: 13px; margin-top: 24px; max-width: 78ch;
+    border-top: 1px solid var(--border); padding-top: 14px; }
+  .notes > summary { font-family: var(--mono); font-size: 11px; text-transform: uppercase;
+    letter-spacing: .09em; color: var(--text-muted); cursor: pointer; list-style: none;
+    display: flex; align-items: center; gap: 7px; padding: 4px 0; }
+  .notes > summary::-webkit-details-marker { display: none; }
+  .notes > summary::before { content: "+"; font-size: 13px; line-height: 1;
+    color: var(--text-secondary); }
+  .notes[open] > summary::before { content: "\2212"; }
+  .notes > summary:hover { color: var(--text-secondary); }
+  .notes > summary:focus-visible { outline: 2px solid var(--series-1); outline-offset: 3px; }
+  .notes > h2:first-of-type { margin-top: 14px; }
   .notes h2 { font-family: var(--mono); font-size: 11px; text-transform: uppercase;
     letter-spacing: .09em; font-weight: 500; margin: 22px 0 6px; color: var(--text-muted); }
   .notes a { color: var(--series-1); }
@@ -228,7 +240,8 @@
     <div id="card" role="dialog" aria-label="Model details"></div>
   </div>
 
-  <div class="legend" id="legend"></div>
+  <div class="legend" id="legend" hidden></div>
+  <p class="count" id="count"></p>
 
   <div class="controls controls-lower">
     <div class="field">
@@ -262,13 +275,13 @@
     </div>
   </div>
 
-  <div class="notes">
+  <details class="notes">
+    <summary>Reading the chart, sources and caveats</summary>
     <h2>Reading the chart</h2>
     <p>
       A model on the dashed line is Pareto-optimal: nothing cheaper scores higher, and
       nothing higher-scoring is cheaper. Models below the line are dominated, which means
-      some other model beats them on both axes at once. Marks are sized by reasoning
-      effort, so a model run harder appears as a larger mark further right.
+      some other model beats them on both axes at once.
     </p>
     <h2>Where the numbers come from</h2>
     <p id="sources"></p>
@@ -280,7 +293,7 @@
       <li id="estnote"></li>
       <li>Models Artificial Analysis has retired, and models it lists no price for at all, are left out entirely.</li>
     </ul>
-  </div>
+  </details>
 </div>
 
 <script type="module">
@@ -288,7 +301,6 @@ import { money, fmtVal, fmtTokens, paretoFrontier, ticks } from './lib.js';
 
 const PALETTE = ['--series-1','--series-2','--series-3','--series-4',
                  '--series-5','--series-6','--series-7','--series-8'];
-const EFFORT_R = { minimal: 3.5, low: 4.5, medium: 5.5, high: 6.5, xhigh: 7.5, max: 8.5 };
 const $ = s => document.querySelector(s);
 const css = v => getComputedStyle(document.body).getPropertyValue(v).trim();
 
@@ -431,7 +443,7 @@ function render() {
       'aria-label': `${m.name}. ${capMeta(state.y).label} ${fmtVal(m.capability[state.y], ykind)}, ${costMeta(state.x).label} ${money(m.cost[state.x])}` }));
     const c = el('circle', {
       cx: px(m.cost[state.x]), cy: py(m.capability[state.y]),
-      r: EFFORT_R[m.effort] || 5.5, fill: colourOf(m),
+      r: 6, fill: colourOf(m),
       opacity: m._front ? 1 : (state.colorby === 'frontier' ? .55 : .8),
     });
     g.appendChild(c);
@@ -507,24 +519,18 @@ const esc = s => String(s).replace(/[&<>"]/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 /* ---------- legend & table ---------- */
+// Colour needs a key only when it carries identity you cannot read off the
+// chart. Frontier status is already legible from the dashed line.
 function drawLegend() {
   const L = $('#legend');
-  const bits = [];
-  if (state.colorby === 'creator') {
-    for (const [c, col] of creatorSlots)
-      bits.push(`<span class="key"><i class="dot" style="background:${col}"></i>${esc(c)}</span>`);
-    bits.push(`<span class="key"><i class="dot" style="background:${css('--off')}"></i>Other</span>`);
-  } else if (state.colorby === 'weights') {
-    bits.push(`<span class="key"><i class="dot" style="background:${css('--series-3')}"></i>Open weights</span>`,
-      `<span class="key"><i class="dot" style="background:${css('--series-1')}"></i>Proprietary</span>`);
-  } else {
-    bits.push(`<span class="key"><i class="dot" style="background:${css('--series-1')}"></i>On the frontier</span>`,
-      `<span class="key"><i class="dot" style="background:${css('--off')}"></i>Dominated</span>`);
-  }
-  bits.push(`<span class="key"><i class="dash"></i>Pareto frontier</span>`);
-  bits.push(`<span class="key">Mark size: reasoning effort, minimal to max</span>`);
-  bits.push(`<span class="key" style="color:var(--text-muted)">${VIEW.length} of ${eligible().length} models shown · ${FRONT.length} on the frontier</span>`);
-  L.innerHTML = bits.join('');
+  L.hidden = state.colorby !== 'creator';
+  L.innerHTML = L.hidden ? '' :
+    [...creatorSlots].map(([c, col]) =>
+      `<span class="key"><i class="dot" style="background:${col}"></i>${esc(c)}</span>`)
+      .concat(`<span class="key"><i class="dot" style="background:${css('--off')}"></i>Other</span>`)
+      .join('');
+  $('#count').textContent =
+    `${VIEW.length} of ${eligible().length} models shown, ${FRONT.length} on the frontier`;
 }
 
 /* ---------- wiring ---------- */
