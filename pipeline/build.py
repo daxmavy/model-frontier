@@ -268,11 +268,49 @@ def build(offline_html: str | None = None) -> dict:
     return build_from_html(aa_html)
 
 
+def bundle(dest: pathlib.Path, data_path: pathlib.Path, for_artifact: bool = False) -> pathlib.Path:
+    """Inline the module and the dataset so the page is one standalone file."""
+    html = (ROOT / "site" / "index.html").read_text(encoding="utf-8")
+    lib = (ROOT / "site" / "lib.js").read_text(encoding="utf-8").replace("export ", "")
+
+    html = html.replace("import { money, fmtVal, fmtTokens, paretoFrontier, ticks } from './lib.js';", lib)
+    html = html.replace("fetch('data/models.json?' + Date.now()).then(r => r.json()).then(d => {",
+                        "Promise.resolve(EMBEDDED_DATA).then(d => {")
+    html = html.replace("<script type=\"module\">",
+                        "<script type=\"module\">\nconst EMBEDDED_DATA = "
+                        + data_path.read_text(encoding="utf-8") + ";\n")
+
+    if for_artifact:
+        # The artifact host supplies its own document shell.
+        for tag in ('<!doctype html>', '<html lang="en">', '<head>', '</head>',
+                    '<body>', '</body>', '</html>',
+                    '<meta charset="utf-8">',
+                    '<meta name="viewport" content="width=device-width, initial-scale=1">'):
+            html = html.replace(tag + "\n", "").replace(tag, "")
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(html, encoding="utf-8")
+    return dest
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--offline-html", help="use a saved leaderboard page instead of fetching")
     ap.add_argument("--out", default=str(OUT))
+    ap.add_argument("--bundle", metavar="PATH",
+                    help="also write a standalone single-file copy of the page")
+    ap.add_argument("--for-artifact", action="store_true",
+                    help="with --bundle, omit the document shell the artifact host provides")
+    ap.add_argument("--no-fetch", action="store_true",
+                    help="bundle the existing dataset without rebuilding it")
     a = ap.parse_args()
+
+    if a.no_fetch:
+        if not a.bundle:
+            raise SystemExit("--no-fetch only makes sense with --bundle")
+        b = bundle(pathlib.Path(a.bundle), pathlib.Path(a.out), a.for_artifact)
+        print(f"bundled -> {b} ({b.stat().st_size/1024:.0f} KB)")
+        raise SystemExit(0)
 
     data = build(a.offline_html)
     out = pathlib.Path(a.out)
@@ -282,3 +320,7 @@ if __name__ == "__main__":
     print(f"{c['models']} models ({c['live']} current), "
           f"{c['withIndexCost']} with index cost, {c['withOpenRouter']} matched to OpenRouter "
           f"-> {out} ({out.stat().st_size/1024:.0f} KB)")
+
+    if a.bundle:
+        b = bundle(pathlib.Path(a.bundle), out, a.for_artifact)
+        print(f"bundled -> {b} ({b.stat().st_size/1024:.0f} KB)")
