@@ -250,6 +250,9 @@ def build_from_html(aa_html: str, or_models: list[dict] | None = None,
             "cost_per_index_point": (total / ii) if total and ii else None,
         }
 
+        if not any(v for v in cost.values()):
+            continue           # a chart about cost has nothing to say about these
+
         models.append({
             "slug": slug,
             "name": r.get("shortName") or r.get("name") or slug,

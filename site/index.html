@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The Model Frontier</title>
+<title>Cost - capability tradeoff reference</title>
 <meta name="description" content="Daily Pareto frontier of large language model capability against holistic cost.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -77,7 +77,7 @@
   .wrap { max-width: 1240px; margin: 0 auto; padding: 24px 20px 64px; }
 
   header { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: baseline; margin-bottom: 4px; }
-  h1 { font-family: var(--display); font-size: 25px; margin: 0;
+  h1 { font-family: var(--display); font-size: 27px; margin: 0;
     letter-spacing: -.015em; font-weight: 600; text-wrap: balance; }
   .sub { color: var(--text-secondary); font-size: 14px; margin: 6px 0 20px; max-width: 62ch; }
   .stamp { font-family: var(--mono); color: var(--text-muted); font-size: 12px; margin-left: auto; }
@@ -108,6 +108,17 @@
     background: var(--series-1); border-color: var(--series-1); color: #fff; font-weight: 600;
   }
   .spacer { flex: 1 1 auto; }
+
+  .warn {
+    border-left: 3px solid var(--series-4);
+    background: color-mix(in srgb, var(--series-4) 9%, var(--surface-1));
+    color: var(--text-secondary); font-size: 13.5px;
+    padding: 11px 14px; border-radius: 0 8px 8px 0; margin: 14px 0 20px; max-width: 84ch;
+  }
+  .warn b { color: var(--text-primary); font-weight: 600; }
+  .warn a { color: var(--series-1); }
+
+  .controls-lower { margin: 22px 0 0; background: none; border-style: dashed; }
 
   .panel {
     background: var(--surface-1); border: 1px solid var(--border);
@@ -179,15 +190,12 @@
 </head>
 <body>
 <div class="wrap">
-  <header>
-    <h1>The Model Frontier</h1>
-    <div class="stamp" id="stamp"></div>
-  </header>
-  <p class="sub">
-    Which language models buy you the most capability per dollar. Cost is measured
-    holistically where possible: the total spend to run a whole benchmark, which counts
-    verbosity and reasoning tokens rather than the headline token price. Each reasoning
-    effort level is its own mark.
+  <h1>Cost - capability tradeoff reference</h1>
+  <p class="warn" role="note">
+    <b>Warning:</b> the default view of this chart uses price data from
+    <a href="https://artificialanalysis.ai/methodology/intelligence-benchmarking"
+       target="_blank" rel="noopener">AAII</a>, which is not available for all models.
+    Switch to a different cost measure to see all models.
   </p>
 
   <div class="controls">
@@ -200,10 +208,34 @@
       <select id="xmetric"></select>
     </div>
     <div class="field">
+      <label for="creator">Developer</label>
+      <select id="creator"><option value="">All</option></select>
+    </div>
+    <div class="field">
+      <label for="weights">Weights</label>
+      <select id="weights">
+        <option value="">Any</option>
+        <option value="open">Open</option>
+        <option value="closed">Proprietary</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="panel">
+    <svg id="chart" role="img" aria-labelledby="charttitle"><title id="charttitle">
+      Scatter plot of model capability against cost, with the Pareto frontier marked.
+    </title></svg>
+    <div id="card" role="dialog" aria-label="Model details"></div>
+  </div>
+
+  <div class="legend" id="legend"></div>
+
+  <div class="controls controls-lower">
+    <div class="field">
       <label for="scope">Show</label>
       <select id="scope">
-        <option value="major-year">Major labs, past year</option>
         <option value="year">Any lab, past year</option>
+        <option value="major-year">Major labs, past year</option>
         <option value="top">Top 60 by capability</option>
         <option value="all">Everything</option>
       </select>
@@ -214,18 +246,6 @@
         <option value="frontier">Frontier status</option>
         <option value="creator">Developer</option>
         <option value="weights">Open weights</option>
-      </select>
-    </div>
-    <div class="field">
-      <label for="creator">Developer</label>
-      <select id="creator"><option value="">All</option></select>
-    </div>
-    <div class="field">
-      <label for="weights">Weights</label>
-      <select id="weights">
-        <option value="">Any</option>
-        <option value="open">Open</option>
-        <option value="closed">Proprietary</option>
       </select>
     </div>
     <div class="field">
@@ -240,28 +260,6 @@
         <option value="640">640 GB, eight H100</option>
       </select>
     </div>
-    <div class="spacer"></div>
-    <div class="field">
-      <label>Include</label>
-      <div class="toggles">
-        <button class="toggle" id="t-est" aria-pressed="true"
-          title="Artificial Analysis flags some scores as estimated rather than fully measured. Every model with a measured cost to run the index has a measured score, so this only affects the price-based cost axes.">Estimated scores</button>
-        <button class="toggle" id="t-tbl" aria-pressed="false">Table</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="panel">
-    <svg id="chart" role="img" aria-labelledby="charttitle"><title id="charttitle">
-      Scatter plot of model capability against cost, with the Pareto frontier marked.
-    </title></svg>
-    <div id="card" role="dialog" aria-label="Model details"></div>
-  </div>
-
-  <div class="legend" id="legend"></div>
-
-  <div id="tablepanel" hidden>
-    <div class="tablewrap"><table id="table"></table></div>
   </div>
 
   <div class="notes">
@@ -280,7 +278,7 @@
       <li>The cost of running the index is a single measurement per model, not an average over repeated runs, so small differences are noise.</li>
       <li>List prices ignore batch discounts, caching, and negotiated rates. Cached input in particular can move real costs a long way.</li>
       <li id="estnote"></li>
-      <li>Models Artificial Analysis has retired are left out entirely.</li>
+      <li>Models Artificial Analysis has retired, and models it lists no price for at all, are left out entirely.</li>
     </ul>
   </div>
 </div>
@@ -298,8 +296,8 @@ let DATA = null, VIEW = [], FRONT = [], pinned = null, hoverTimer = null;
 
 const state = {
   y: 'intelligenceIndex', x: 'aaii_cost_total',
-  scope: 'major-year', colorby: 'frontier', creator: '',
-  weights: '', vram: 0, dep: false, est: true, tbl: false,
+  scope: 'year', colorby: 'frontier', creator: '',
+  weights: '', vram: 0,
 };
 
 const capMeta = k => DATA.capabilityMetrics.find(m => m.key === k);
@@ -313,7 +311,6 @@ const YEAR_AGO = new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10);
 function eligible() {
   return DATA.models.filter(m =>
     m.capability[state.y] != null && m.cost[state.x] != null && m.cost[state.x] > 0 &&
-    (state.est || !m.estimated) &&
     (!state.creator || m.creator === state.creator) &&
     (state.weights === '' || (state.weights === 'open') === m.openWeights) &&
     (!state.vram || (m.openWeights && m.vramGB != null && m.vramGB <= state.vram)));
@@ -381,7 +378,7 @@ function render() {
   if (!VIEW.length) {
     add(el('text', { x: W / 2, y: H / 2, 'text-anchor': 'middle', class: 'empty' }))
       .textContent = 'No models report both of these measures.';
-    drawLegend(); drawTable();
+    drawLegend();
     return;
   }
 
@@ -462,7 +459,6 @@ function render() {
   });
 
   drawLegend();
-  drawTable();
 }
 
 /* ---------- hover card ---------- */
@@ -531,30 +527,12 @@ function drawLegend() {
   L.innerHTML = bits.join('');
 }
 
-function drawTable() {
-  if (!state.tbl) return;
-  const kind = capMeta(state.y).kind;
-  const rows = [...VIEW].sort((a, b) => b.capability[state.y] - a.capability[state.y]);
-  $('#table').innerHTML =
-    `<thead><tr><th>Model</th><th>Effort</th><th>Developer</th>
-      <th>${esc(capMeta(state.y).label)}</th><th>${esc(costMeta(state.x).label)}</th>
-      <th>Frontier</th><th>Links</th></tr></thead><tbody>` +
-    rows.map(m => `<tr>
-      <td>${esc(m.release)}</td><td>${esc(m.effort || '—')}</td><td>${esc(m.creator)}</td>
-      <td>${fmtVal(m.capability[state.y], kind)}</td><td>${money(m.cost[state.x])}</td>
-      <td>${m._front ? 'yes' : ''}</td>
-      <td><a href="${m.aaUrl}" target="_blank" rel="noopener">AA</a>${
-        m.orUrl ? ` · <a href="${m.orUrl}" target="_blank" rel="noopener">OR</a>` : ''}</td>
-    </tr>`).join('') + '</tbody>';
-}
-
 /* ---------- wiring ---------- */
 function readHash() {
   const p = new URLSearchParams(location.hash.slice(1));
   for (const k of ['y', 'x', 'scope', 'colorby', 'creator', 'weights'])
     if (p.has(k)) state[k] = p.get(k);
   if (p.has('vram')) state.vram = +p.get('vram');
-  for (const k of ['est', 'tbl']) if (p.has(k)) state[k] = p.get(k) === '1';
 }
 function writeHash() {
   const p = new URLSearchParams();
@@ -563,8 +541,6 @@ function writeHash() {
   if (state.creator) p.set('creator', state.creator);
   if (state.weights) p.set('weights', state.weights);
   if (state.vram) p.set('vram', state.vram);
-  if (!state.est) p.set('est', '0');
-  if (state.tbl) p.set('tbl', '1');
   history.replaceState(null, '', '#' + p);
 }
 
@@ -581,19 +557,6 @@ function bind() {
   sel('#ymetric', 'y'); sel('#xmetric', 'x');
   sel('#scope', 'scope'); sel('#vram', 'vram', true);
   sel('#colorby', 'colorby'); sel('#creator', 'creator'); sel('#weights', 'weights');
-
-  const tog = (id, key, after) => {
-    const b = $(id);
-    b.setAttribute('aria-pressed', String(state[key]));
-    b.addEventListener('click', () => {
-      state[key] = !state[key];
-      b.setAttribute('aria-pressed', String(state[key]));
-      writeHash(); if (after) after(); render();
-    });
-  };
-  tog('#t-est', 'est');
-  tog('#t-tbl', 'tbl', () => $('#tablepanel').hidden = !state.tbl);
-  $('#tablepanel').hidden = !state.tbl;
 
   $('#card').addEventListener('pointerenter', () => clearTimeout(hoverTimer));
   $('#card').addEventListener('pointerleave', scheduleHide);
@@ -620,16 +583,13 @@ function fillSelects() {
 
 fetch('data/models.json?' + Date.now()).then(r => r.json()).then(d => {
   DATA = d;
-  const when = new Date(d.generated);
-  $('#stamp').innerHTML = `Updated <b>${when.toISOString().slice(0, 10)}</b> · ` +
-    `${d.counts.models} current models · ${d.counts.withIndexCost} with measured index cost`;
   const est = d.models.filter(m => m.estimated);
   const estCost = est.filter(m => m.cost.aaii_cost_total).length;
   $('#estnote').innerHTML =
     `Artificial Analysis marks ${est.length} of the ${d.counts.models} models here as ` +
     `<em>estimated</em> rather than fully measured, and does not publish what that means. ` +
     (estCost === 0
-      ? 'None of them has a measured cost to run the index, so the toggle changes nothing on the default cost axis and only bites on the price-based ones.'
+      ? 'None of them has a measured cost to run the index, so they appear only on the price-based cost axes.'
       : `${estCost} of them also carry a measured index cost.`);
   $('#sources').innerHTML =
     `Capability scores, prices and the cost of running the Intelligence Index come from ` +
@@ -639,7 +599,7 @@ fetch('data/models.json?' + Date.now()).then(r => r.json()).then(d => {
     `The dataset is rebuilt every day; this copy was generated ${d.generated.replace('T', ' ').replace('+00:00', ' UTC')}.`;
   readHash(); fillSelects(); bind(); render();
 }).catch(e => {
-  $('#stamp').textContent = 'Could not load the dataset.';
+  document.querySelector('.warn').textContent = 'Could not load the dataset.';
   console.error(e);
 });
 </script>

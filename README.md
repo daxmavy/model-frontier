@@ -1,4 +1,4 @@
-# The Model Frontier
+# Cost - capability tradeoff reference
 
 A daily-updating chart of what language-model capability actually costs.
 
@@ -75,6 +75,12 @@ node --test 'tests/*.test.mjs'
 The Python tests cover the leaderboard parser and the record shaping against a
 miniature fixture of the page payload. The JavaScript tests cover the Pareto
 selection, the axis ticks and the number formatting.
+
+## What is left out
+
+Models Artificial Analysis has retired, and models it lists no price for at all,
+never reach the page. A chart about cost has nothing to say about a model whose
+cost is unknown on every axis.
 
 ## Caveats
 

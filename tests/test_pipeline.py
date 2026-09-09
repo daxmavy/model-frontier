@@ -106,6 +106,15 @@ class TestBuild(unittest.TestCase):
         self.assertNotIn("budget-9", slugs)          # marked deprecated in the fixture
         self.assertNotIn("deprecated", data["models"][0])
 
+    def test_models_with_no_cost_data_are_dropped(self):
+        import unittest.mock as mock
+        page = PAGE.replace(r'\"price1mInputTokens\":2.0,', '').replace(
+            r'\"price1mOutputTokens\":10.0,', '').replace(
+            r'\"intelligenceIndexCostPerTask\":{\"cost\":{\"total\":4.0}},', '')
+        with mock.patch.object(build, "fetch", side_effect=RuntimeError("offline")):
+            data = build.build_from_html(page, min_models=1)
+        self.assertEqual(data["models"], [])
+
     def test_build_refuses_a_page_it_could_not_parse(self):
         with self.assertRaises(SystemExit):
             build.build_from_html("<html>nothing here</html>", min_models=1)
