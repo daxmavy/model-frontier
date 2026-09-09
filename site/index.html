@@ -216,12 +216,12 @@
       </select>
     </div>
     <div class="field">
-      <label for="limit">Show</label>
-      <select id="limit">
-        <option value="30">Top 30</option>
-        <option value="60" selected>Top 60</option>
-        <option value="120">Top 120</option>
-        <option value="9999">All</option>
+      <label for="scope">Show</label>
+      <select id="scope">
+        <option value="major-year">Major labs, past year</option>
+        <option value="year">Any lab, past year</option>
+        <option value="top">Top 60 by rank</option>
+        <option value="all">Everything</option>
       </select>
     </div>
     <div class="field">
@@ -235,6 +235,26 @@
     <div class="field">
       <label for="creator">Developer</label>
       <select id="creator"><option value="">All</option></select>
+    </div>
+    <div class="field">
+      <label for="weights">Weights</label>
+      <select id="weights">
+        <option value="">Any</option>
+        <option value="open">Open</option>
+        <option value="closed">Proprietary</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="vram">Fits in</label>
+      <select id="vram">
+        <option value="0">Any hardware</option>
+        <option value="24">24 GB</option>
+        <option value="48">48 GB</option>
+        <option value="80">80 GB, one H100</option>
+        <option value="160">160 GB</option>
+        <option value="320">320 GB, four H100</option>
+        <option value="640">640 GB, eight H100</option>
+      </select>
     </div>
     <div class="spacer"></div>
     <div class="field">
@@ -293,20 +313,34 @@ let DATA = null, VIEW = [], FRONT = [], pinned = null, hoverTimer = null;
 
 const state = {
   y: 'intelligenceIndex', x: 'aaii_cost_total', scale: 'log',
-  rank: 'capability', limit: 60, colorby: 'frontier', creator: '',
-  dep: false, est: true, tbl: false,
+  rank: 'capability', scope: 'major-year', colorby: 'frontier', creator: '',
+  weights: '', vram: 0, dep: false, est: true, tbl: false,
 };
 
 const capMeta = k => DATA.capabilityMetrics.find(m => m.key === k);
 const costMeta = k => DATA.costMetrics.find(m => m.key === k);
 
 /* ---------- selection ---------- */
+const YEAR_AGO = new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10);
+
+// Filters restrict which models exist at all, so the frontier is drawn through
+// the set you asked for.
 function eligible() {
   return DATA.models.filter(m =>
     m.capability[state.y] != null && m.cost[state.x] != null && m.cost[state.x] > 0 &&
     (state.dep || !m.deprecated) &&
     (state.est || !m.estimated) &&
-    (!state.creator || m.creator === state.creator));
+    (!state.creator || m.creator === state.creator) &&
+    (state.weights === '' || (state.weights === 'open') === m.openWeights) &&
+    (!state.vram || (m.openWeights && m.vramGB != null && m.vramGB <= state.vram)));
+}
+
+// Scope only decides how much of that set is drawn, so the frontier ignores it.
+function inScope(m) {
+  if (state.scope === 'all') return true;
+  if (state.scope === 'year') return (m.releaseDate || '') >= YEAR_AGO;
+  if (state.scope === 'major-year') return m.majorLab && (m.releaseDate || '') >= YEAR_AGO;
+  return false;
 }
 
 const rankers = {
@@ -323,8 +357,11 @@ function recompute() {
   FRONT = paretoFrontier(rows, m => m.cost[state.x], m => m.capability[state.y]);
   const onFront = new Set(FRONT.map(m => m.slug));
   // The frontier is the point of the chart, so it is never truncated away.
-  const rest = rows.filter(m => !onFront.has(m.slug)).sort(rankers[state.rank]);
-  VIEW = [...FRONT, ...rest.slice(0, Math.max(0, state.limit - FRONT.length))];
+  const others = rows.filter(m => !onFront.has(m.slug));
+  const rest = state.scope === 'top'
+    ? others.sort(rankers[state.rank]).slice(0, Math.max(0, 60 - FRONT.length))
+    : others.filter(inScope);
+  VIEW = [...FRONT, ...rest];
   VIEW.forEach(m => { m._front = onFront.has(m.slug); });
 }
 
@@ -464,6 +501,8 @@ function showCard(m, circle) {
     ['Released', m.releaseDate || '—'],
     ['Context', m.contextTokens ? (m.contextTokens / 1000).toFixed(0) + 'K' : '—'],
     ['Speed', m.speed ? m.speed.toFixed(0) + ' tok/s' : '—'],
+    ['Parameters', m.params ? (m.params / 1e9).toFixed(0) + 'B' : '—'],
+    ['Needs about', m.vramGB ? m.vramGB.toFixed(0) + ' GB at bf16' : '—'],
     ['OpenRouter use', m.usageTokens ? fmtTokens(m.usageTokens) + ' tok/day' : '—'],
   ];
   card.innerHTML = `
@@ -536,16 +575,18 @@ function drawTable() {
 /* ---------- wiring ---------- */
 function readHash() {
   const p = new URLSearchParams(location.hash.slice(1));
-  for (const k of ['y', 'x', 'scale', 'rank', 'colorby', 'creator'])
+  for (const k of ['y', 'x', 'scale', 'rank', 'scope', 'colorby', 'creator', 'weights'])
     if (p.has(k)) state[k] = p.get(k);
-  if (p.has('limit')) state.limit = +p.get('limit');
+  if (p.has('vram')) state.vram = +p.get('vram');
   for (const k of ['dep', 'est', 'tbl']) if (p.has(k)) state[k] = p.get(k) === '1';
 }
 function writeHash() {
   const p = new URLSearchParams();
   p.set('y', state.y); p.set('x', state.x); p.set('scale', state.scale);
-  p.set('rank', state.rank); p.set('limit', state.limit); p.set('colorby', state.colorby);
+  p.set('rank', state.rank); p.set('scope', state.scope); p.set('colorby', state.colorby);
   if (state.creator) p.set('creator', state.creator);
+  if (state.weights) p.set('weights', state.weights);
+  if (state.vram) p.set('vram', state.vram);
   if (state.dep) p.set('dep', '1');
   if (!state.est) p.set('est', '0');
   if (state.tbl) p.set('tbl', '1');
@@ -563,8 +604,8 @@ function bind() {
     });
   };
   sel('#ymetric', 'y'); sel('#xmetric', 'x'); sel('#scale', 'scale');
-  sel('#rank', 'rank'); sel('#limit', 'limit', true);
-  sel('#colorby', 'colorby'); sel('#creator', 'creator');
+  sel('#rank', 'rank'); sel('#scope', 'scope'); sel('#vram', 'vram', true);
+  sel('#colorby', 'colorby'); sel('#creator', 'creator'); sel('#weights', 'weights');
 
   const tog = (id, key, after) => {
     const b = $(id);

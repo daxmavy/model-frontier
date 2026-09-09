@@ -29,8 +29,13 @@ both, and it is careful about what "cost" means.
 | Source | What it contributes |
 | --- | --- |
 | Artificial Analysis leaderboard | capability scores, list prices, cost to run the index, reasoning effort |
-| OpenRouter model list | live provider pricing, model links |
+| Epoch AI benchmark results | FrontierMath and other tasks Artificial Analysis does not run |
+| OpenRouter model list | live provider pricing, model links, Hugging Face identifiers |
 | OpenRouter rankings | recent token usage, used for the popularity ranking |
+| Hugging Face | parameter counts, which become the memory estimate |
+
+Epoch records reasoning effort in its model identifiers too, so its scores join
+onto the right variant rather than being smeared across a model family.
 
 `site/index.html` is a single page with no build step and no runtime
 dependencies. It fetches that JSON and draws the chart itself.
@@ -38,6 +43,20 @@ dependencies. It fetches that JSON and draws the chart itself.
 A GitHub Action rebuilds the dataset every morning, commits it, and redeploys the
 page. If a source changes shape the build aborts and the job fails, so the
 previously deployed site stays up rather than being replaced by a broken one.
+
+## Choosing what to show
+
+By default the chart shows every model a major lab released in the past year.
+The frontier is computed over everything that passes the filters and is never
+truncated, so a cheap outlier still appears even when it falls outside the
+default scope.
+
+Three filters narrow the set further: open weights against proprietary, a single
+developer, and a memory ceiling. The memory filter keeps only open-weight models
+whose parameter count fits the chosen card, at roughly two bytes per parameter
+with a fifth again for activations and the key-value cache. A proprietary model
+cannot be run on your own hardware at any size, so it drops out whenever a
+ceiling is set.
 
 ## Running it locally
 

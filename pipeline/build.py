@@ -19,6 +19,8 @@ import re
 import sys
 import urllib.request
 
+import epoch
+import weights
 from aa_parse import extract, _arrays
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -28,6 +30,17 @@ CACHE = ROOT / "data"
 AA_LEADERBOARD = "https://artificialanalysis.ai/leaderboards/models"
 OR_MODELS = "https://openrouter.ai/api/v1/models"
 OR_RANKINGS = "https://openrouter.ai/rankings"
+HF_CACHE = ROOT / "data" / "hf_params.json"
+
+# The labs whose releases the chart shows by default: the Western frontier labs
+# and the Chinese labs that ship competitive frontier models. Everything else
+# stays one click away behind the developer filter.
+MAJOR_LABS = {
+    "OpenAI", "Anthropic", "Google", "Google DeepMind", "xAI", "SpaceXAI",
+    "Meta", "Mistral",
+    "DeepSeek", "Alibaba", "Moonshot AI", "Kimi", "Z AI", "Zhipu AI",
+    "MiniMax", "Tencent", "ByteDance", "Baidu", "Xiaomi",
+}
 
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/131.0 Safari/537.36")
@@ -60,7 +73,7 @@ CAPABILITY_METRICS = [
     ("analystAgent", "Analyst Agent", "frac", "Long-horizon analyst tasks."),
     ("apexAgents", "APEX Agents", "frac", "Agentic professional tasks."),
     ("itbenchSre", "IT-Bench SRE", "frac", "Site-reliability engineering tasks."),
-]
+] + epoch.metrics()
 
 COST_METRICS = [
     ("aaii_cost_total", "Cost to run the Intelligence Index (USD)",
@@ -176,6 +189,19 @@ def build_from_html(aa_html: str, or_models: list[dict] | None = None,
             print(f"warning: OpenRouter rankings unavailable ({e})", file=sys.stderr)
             usage = {}
 
+    try:
+        ep_scores, ep_params = epoch.parse(fetch(epoch.CSV_URL))
+    except Exception as e:                                    # noqa: BLE001
+        print(f"warning: Epoch AI results unavailable ({e})", file=sys.stderr)
+        ep_scores, ep_params = {}, {}
+
+    hf_ids = sorted({m["hugging_face_id"] for m in or_models if m.get("hugging_face_id")})
+    try:
+        hf_params = weights.resolve(hf_ids, HF_CACHE)
+    except Exception as e:                                    # noqa: BLE001
+        print(f"warning: Hugging Face parameter counts unavailable ({e})", file=sys.stderr)
+        hf_params = {}
+
     models = []
     for slug, r in aa_rows.items():
         cap = {k: r.get(k) for k, *_ in CAPABILITY_METRICS if isinstance(r.get(k), (int, float))}
@@ -196,6 +222,19 @@ def build_from_html(aa_html: str, or_models: list[dict] | None = None,
                 break
         or_in = or_price(orm, "prompt") if orm else None
         or_out = or_price(orm, "completion") if orm else None
+
+        # Epoch reports per reasoning level too, so match on the level first.
+        ep = (ep_scores.get((norm(base_slug), eff.get("label")))
+              or ep_scores.get((norm(slug), eff.get("label")))
+              or (ep_scores.get((norm(base_slug), None)) if not eff else None)
+              or {})
+        cap.update({k: v for k, v in ep.items() if k not in cap})
+
+        params = None
+        if orm and orm.get("hugging_face_id"):
+            params = hf_params.get(orm["hugging_face_id"])
+        if params is None:
+            params = ep_params.get(norm(base_slug))
 
         total = cost_total(r)
         ii = r.get("intelligenceIndex")
@@ -224,6 +263,9 @@ def build_from_html(aa_html: str, or_models: list[dict] | None = None,
             "speed": r.get("medianOutputTokensPerSecond"),
             "latency": r.get("medianTimeToFirstAnswerTokenSeconds"),
             "estimated": bool(r.get("intelligenceIndexIsEstimated")),
+            "majorLab": (r.get("modelCreatorName") or "") in MAJOR_LABS,
+            "params": params,
+            "vramGB": round(weights.vram_gb(params), 1) if params else None,
             "capability": {k: round(v, 4) for k, v in cap.items()},
             "cost": {k: (round(v, 6) if v is not None else None) for k, v in cost.items()},
             "aaUrl": f"https://artificialanalysis.ai/models/{slug}",
@@ -249,6 +291,9 @@ def build_from_html(aa_html: str, or_models: list[dict] | None = None,
             "live": sum(1 for m in models if not m["deprecated"]),
             "withIndexCost": sum(1 for m in models if m["cost"]["aaii_cost_total"]),
             "withOpenRouter": sum(1 for m in models if m["orUrl"]),
+            "withEpoch": sum(1 for m in models
+                             if any(k.startswith("epoch_") for k in m["capability"])),
+            "withParams": sum(1 for m in models if m["params"]),
         },
         "capabilityMetrics": [
             {"key": k, "label": lab, "kind": kind, "help": h} for k, lab, kind, h in caps
