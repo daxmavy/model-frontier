@@ -200,13 +200,6 @@
       <select id="xmetric"></select>
     </div>
     <div class="field">
-      <label for="scale">Cost axis</label>
-      <select id="scale">
-        <option value="log">Logarithmic</option>
-        <option value="linear">Linear</option>
-      </select>
-    </div>
-    <div class="field">
       <label for="scope">Show</label>
       <select id="scope">
         <option value="major-year">Major labs, past year</option>
@@ -251,7 +244,8 @@
     <div class="field">
       <label>Include</label>
       <div class="toggles">
-        <button class="toggle" id="t-est" aria-pressed="true">Estimated scores</button>
+        <button class="toggle" id="t-est" aria-pressed="true"
+          title="Artificial Analysis flags some scores as estimated rather than fully measured. Every model with a measured cost to run the index has a measured score, so this only affects the price-based cost axes.">Estimated scores</button>
         <button class="toggle" id="t-tbl" aria-pressed="false">Table</button>
       </div>
     </div>
@@ -285,7 +279,7 @@
       <li>Benchmark scores measure benchmark performance. They are a proxy for usefulness, not a measurement of it.</li>
       <li>The cost of running the index is a single measurement per model, not an average over repeated runs, so small differences are noise.</li>
       <li>List prices ignore batch discounts, caching, and negotiated rates. Cached input in particular can move real costs a long way.</li>
-      <li>Some scores are estimated rather than measured. Turn off <em>Estimated scores</em> to exclude them.</li>
+      <li id="estnote"></li>
       <li>Models Artificial Analysis has retired are left out entirely.</li>
     </ul>
   </div>
@@ -303,7 +297,7 @@ const css = v => getComputedStyle(document.body).getPropertyValue(v).trim();
 let DATA = null, VIEW = [], FRONT = [], pinned = null, hoverTimer = null;
 
 const state = {
-  y: 'intelligenceIndex', x: 'aaii_cost_total', scale: 'log',
+  y: 'intelligenceIndex', x: 'aaii_cost_total',
   scope: 'major-year', colorby: 'frontier', creator: '',
   weights: '', vram: 0, dep: false, est: true, tbl: false,
 };
@@ -391,7 +385,7 @@ function render() {
     return;
   }
 
-  const log = state.scale === 'log';
+  const log = true;   // cost spans four orders of magnitude; linear is unreadable
   const xs = VIEW.map(m => m.cost[state.x]), ys = VIEW.map(m => m.capability[state.y]);
   let x0 = Math.min(...xs), x1 = Math.max(...xs);
   let y0 = Math.min(...ys), y1 = Math.max(...ys);
@@ -418,7 +412,7 @@ function render() {
   add(el('line', { class: 'ax-line', x1: M.l, x2: W - M.r, y1: H - M.b, y2: H - M.b }));
   add(el('line', { class: 'ax-line', x1: M.l, x2: M.l, y1: M.t, y2: H - M.b }));
   add(el('text', { class: 'ax-title', x: (M.l + W - M.r) / 2, y: H - 10, 'text-anchor': 'middle' }))
-    .textContent = costMeta(state.x).label + (log ? ', log scale' : '');
+    .textContent = costMeta(state.x).label + ', log scale';
   const yt = add(el('text', { class: 'ax-title', 'text-anchor': 'middle',
     transform: `translate(14 ${(M.t + H - M.b) / 2}) rotate(-90)` }));
   yt.textContent = capMeta(state.y).label;
@@ -557,14 +551,14 @@ function drawTable() {
 /* ---------- wiring ---------- */
 function readHash() {
   const p = new URLSearchParams(location.hash.slice(1));
-  for (const k of ['y', 'x', 'scale', 'scope', 'colorby', 'creator', 'weights'])
+  for (const k of ['y', 'x', 'scope', 'colorby', 'creator', 'weights'])
     if (p.has(k)) state[k] = p.get(k);
   if (p.has('vram')) state.vram = +p.get('vram');
   for (const k of ['est', 'tbl']) if (p.has(k)) state[k] = p.get(k) === '1';
 }
 function writeHash() {
   const p = new URLSearchParams();
-  p.set('y', state.y); p.set('x', state.x); p.set('scale', state.scale);
+  p.set('y', state.y); p.set('x', state.x);
   p.set('scope', state.scope); p.set('colorby', state.colorby);
   if (state.creator) p.set('creator', state.creator);
   if (state.weights) p.set('weights', state.weights);
@@ -584,7 +578,7 @@ function bind() {
       writeHash(); render();
     });
   };
-  sel('#ymetric', 'y'); sel('#xmetric', 'x'); sel('#scale', 'scale');
+  sel('#ymetric', 'y'); sel('#xmetric', 'x');
   sel('#scope', 'scope'); sel('#vram', 'vram', true);
   sel('#colorby', 'colorby'); sel('#creator', 'creator'); sel('#weights', 'weights');
 
@@ -629,6 +623,14 @@ fetch('data/models.json?' + Date.now()).then(r => r.json()).then(d => {
   const when = new Date(d.generated);
   $('#stamp').innerHTML = `Updated <b>${when.toISOString().slice(0, 10)}</b> · ` +
     `${d.counts.models} current models · ${d.counts.withIndexCost} with measured index cost`;
+  const est = d.models.filter(m => m.estimated);
+  const estCost = est.filter(m => m.cost.aaii_cost_total).length;
+  $('#estnote').innerHTML =
+    `Artificial Analysis marks ${est.length} of the ${d.counts.models} models here as ` +
+    `<em>estimated</em> rather than fully measured, and does not publish what that means. ` +
+    (estCost === 0
+      ? 'None of them has a measured cost to run the index, so the toggle changes nothing on the default cost axis and only bites on the price-based ones.'
+      : `${estCost} of them also carry a measured index cost.`);
   $('#sources').innerHTML =
     `Capability scores, prices and the cost of running the Intelligence Index come from ` +
     `<a href="https://artificialanalysis.ai/leaderboards/models" target="_blank" rel="noopener">Artificial Analysis</a>. ` +
