@@ -153,11 +153,8 @@ def usage_by_model(html: str) -> dict[str, float]:
 
 
 def cost_total(rec: dict) -> float | None:
-    c = rec.get("intelligenceIndexCostPerTask")
-    if isinstance(c, dict):
-        v = c.get("cost", {}).get("total")
-        return float(v) if isinstance(v, (int, float)) else None
-    return None
+    v = rec.get("intelligenceIndexCostPerTask")
+    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
 
 
 def build_from_html(aa_html: str, or_models: list[dict] | None = None,

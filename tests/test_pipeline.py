@@ -17,7 +17,7 @@ PAGE = r'''
  \"modelCreatorName\":\"Acme\",\"isReasoning\":true,\"isOpenWeights\":false,
  \"deprecated\":false,\"releaseDate\":\"2026-05-01\",\"contextWindowTokens\":200000,
  \"price1mInputTokens\":2.0,\"price1mOutputTokens\":10.0,
- \"intelligenceIndexCostPerTask\":{\"cost\":{\"total\":4.0}},\"gpqa\":0.8},
+ \"intelligenceIndexCostPerTask\":4.0,\"gpqa\":0.8},
 {\"slug\":\"budget-9\",\"shortName\":\"Budget 9\",\"intelligenceIndex\":20.0,
  \"release\":{\"slug\":\"budget-9\",\"name\":\"Budget 9\"},\"modelCreatorName\":\"Thrift\",
  \"isReasoning\":false,\"isOpenWeights\":true,\"deprecated\":true,
@@ -63,9 +63,10 @@ class TestHelpers(unittest.TestCase):
     def test_undate_leaves_version_numbers_alone(self):
         self.assertEqual(build.undate("glm-4-5v"), "glm-4-5v")
 
-    def test_cost_total_reads_the_nested_value(self):
-        self.assertEqual(build.cost_total({"intelligenceIndexCostPerTask": {"cost": {"total": 3.5}}}), 3.5)
+    def test_cost_total_reads_the_number(self):
+        self.assertEqual(build.cost_total({"intelligenceIndexCostPerTask": 3.5}), 3.5)
         self.assertIsNone(build.cost_total({"intelligenceIndexCostPerTask": None}))
+        self.assertIsNone(build.cost_total({"intelligenceIndexCostPerTask": "$undefined"}))
         self.assertIsNone(build.cost_total({}))
 
     def test_openrouter_index_ignores_variant_ids(self):
@@ -110,7 +111,7 @@ class TestBuild(unittest.TestCase):
         import unittest.mock as mock
         page = PAGE.replace(r'\"price1mInputTokens\":2.0,', '').replace(
             r'\"price1mOutputTokens\":10.0,', '').replace(
-            r'\"intelligenceIndexCostPerTask\":{\"cost\":{\"total\":4.0}},', '')
+            r'\"intelligenceIndexCostPerTask\":4.0,', '')
         with mock.patch.object(build, "fetch", side_effect=RuntimeError("offline")):
             data = build.build_from_html(page, min_models=1)
         self.assertEqual(data["models"], [])
