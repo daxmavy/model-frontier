@@ -7,6 +7,11 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "pipelin
 from aa_parse import extract                                    # noqa: E402
 import build                                                    # noqa: E402
 
+# Every other Artificial Analysis score, so the miniature page below is complete:
+# the build refuses a page on which one of them has vanished.
+AA_SCORES = "".join(rf'\"{k}\":0.5,' for k, *_ in build.CAPABILITY_METRICS
+                    if k not in build.OPTIONAL_METRICS | {"intelligenceIndex", "gpqa"})
+
 # A miniature version of the flight-data payload the leaderboard page embeds:
 # escaped quotes, one model split across two sections, and a "$undefined" hole.
 PAGE = r'''
@@ -18,6 +23,13 @@ PAGE = r'''
  \"deprecated\":false,\"releaseDate\":\"2026-05-01\",\"contextWindowTokens\":200000,
  \"price1mInputTokens\":2.0,\"price1mOutputTokens\":10.0,
  \"intelligenceIndexCostPerTask\":4.0,\"gpqa\":0.8},
+{\"slug\":\"acme-1-low\",\"shortName\":\"Acme 1 (low)\",\"intelligenceIndex\":30.0,
+ \"effort\":{\"slug\":\"low\",\"label\":\"low\",\"level\":10},
+ \"release\":{\"slug\":\"acme-1\",\"name\":\"Acme 1\"},
+ \"modelCreatorName\":\"Acme\",\"isReasoning\":true,\"isOpenWeights\":false,
+ \"deprecated\":false,\"releaseDate\":\"2026-05-01\",\"contextWindowTokens\":200000,
+ \"price1mInputTokens\":1.0,\"price1mOutputTokens\":5.0,@@AA_SCORES@@
+ \"intelligenceIndexCostPerTask\":1.5,\"gpqa\":0.6},
 {\"slug\":\"budget-9\",\"shortName\":\"Budget 9\",\"intelligenceIndex\":20.0,
  \"release\":{\"slug\":\"budget-9\",\"name\":\"Budget 9\"},\"modelCreatorName\":\"Thrift\",
  \"isReasoning\":false,\"isOpenWeights\":true,\"deprecated\":true,
@@ -26,7 +38,7 @@ PAGE = r'''
  \"intelligenceIndexCostPerTask\":\"$undefined\",\"gpqa\":0.4}]}]"])</script>
 <script>self.__next_f.push([1,"b:[\"$\",\"$L2\",null,{\"models\":[
 {\"slug\":\"acme-1-high\",\"medianOutputTokensPerSecond\":88.0}]}]"])</script>
-'''
+'''.replace("@@AA_SCORES@@", AA_SCORES)
 
 
 class TestExtract(unittest.TestCase):
@@ -34,7 +46,7 @@ class TestExtract(unittest.TestCase):
         self.rows, self.keys = extract(PAGE)
 
     def test_finds_every_model_once(self):
-        self.assertEqual(sorted(self.rows), ["acme-1-high", "budget-9"])
+        self.assertEqual(sorted(self.rows), ["acme-1-high", "acme-1-low", "budget-9"])
 
     def test_merges_fields_across_page_sections(self):
         # speed arrives in a later section than the rest of the row
@@ -114,7 +126,23 @@ class TestBuild(unittest.TestCase):
             r'\"intelligenceIndexCostPerTask\":4.0,', '')
         with mock.patch.object(build, "fetch", side_effect=RuntimeError("offline")):
             data = build.build_from_html(page, min_models=1)
-        self.assertEqual(data["models"], [])
+        self.assertEqual([m["slug"] for m in data["models"]], ["acme-1-low"])
+
+    def test_build_refuses_a_page_missing_a_metric(self):
+        import unittest.mock as mock
+        page = PAGE.replace(r'\"intelligenceIndexCostPerTask\":4.0,', '').replace(
+            r'\"intelligenceIndexCostPerTask\":1.5,', '')
+        with mock.patch.object(build, "fetch", side_effect=RuntimeError("offline")):
+            with self.assertRaises(SystemExit) as refused:
+                build.build_from_html(page, min_models=1)
+        self.assertIn("aaii_cost_total", str(refused.exception))
+
+    def test_build_refuses_a_page_with_no_usable_models(self):
+        import unittest.mock as mock
+        page = PAGE.replace(r'\"deprecated\":false', r'\"deprecated\":true')
+        with mock.patch.object(build, "fetch", side_effect=RuntimeError("offline")):
+            with self.assertRaises(SystemExit):
+                build.build_from_html(page, min_models=1)
 
     def test_build_refuses_a_page_it_could_not_parse(self):
         with self.assertRaises(SystemExit):

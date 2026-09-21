@@ -48,10 +48,6 @@ UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
 CAPABILITY_METRICS = [
     ("intelligenceIndex", "Intelligence Index", "index",
      "Artificial Analysis Intelligence Index: a composite of ten evaluations."),
-    ("codingIndex", "Coding Index", "index",
-     "Composite of the coding evaluations."),
-    ("agenticIndex", "Agentic Index", "index",
-     "Composite of the agentic / tool-use evaluations."),
     ("gpqa", "GPQA Diamond", "frac", "Graduate-level science questions."),
     ("hle", "Humanity's Last Exam", "frac", "Very hard expert-written questions."),
     ("omniscienceAccuracy", "Omniscience (accuracy)", "frac",
@@ -87,6 +83,10 @@ COST_METRICS = [
     ("cost_per_index_point", "Cost per task per index point (USD)",
      "Cost of one task divided by the intelligence score the model achieved."),
 ]
+
+# Metrics from the sources a build can run without, OpenRouter and Epoch AI.
+# Every other metric comes from the Artificial Analysis page and must be there.
+OPTIONAL_METRICS = {"or_blended_price"} | {k for k, *_ in epoch.metrics()}
 
 
 def fetch(url: str, binary: bool = False) -> str | bytes:
@@ -265,6 +265,15 @@ def build_from_html(aa_html: str, or_models: list[dict] | None = None,
 
     def reported(key, group, floor):
         return sum(1 for m in models if m[group].get(key) is not None) >= floor
+
+    # A metric no model reports any more means the page changed shape under us.
+    # Abort, so the job fails and the last good site stays up, rather than let
+    # the metric slip off the page unnoticed.
+    vanished = [k for group, metrics in (("capability", CAPABILITY_METRICS), ("cost", COST_METRICS))
+                for k, *_ in metrics if k not in OPTIONAL_METRICS and not reported(k, group, 1)]
+    if vanished:
+        raise SystemExit(f"No model reports {', '.join(vanished)}; the Artificial Analysis "
+                         "page has probably changed shape.")
 
     floor = min(10, max(1, len(models) // 10))
     caps = [c for c in CAPABILITY_METRICS if reported(c[0], "capability", floor)]
