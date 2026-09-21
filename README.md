@@ -42,9 +42,10 @@ onto the right variant rather than being smeared across a model family.
 `site/index.html` is a single page with no build step and no runtime
 dependencies. It fetches that JSON and draws the chart itself.
 
-A GitHub Action rebuilds the dataset every morning, commits it, and redeploys the
-page. If a source changes shape the build aborts and the job fails, so the
-previously deployed site stays up rather than being replaced by a broken one.
+A GitHub Action rebuilds the dataset every morning and redeploys the page with
+it; the copy of the dataset in the repository is only a snapshot. If a source
+changes shape the build aborts and the job fails, so the previously deployed
+site stays up rather than being replaced by a broken one.
 
 ## Choosing what to show
 
